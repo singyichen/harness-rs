@@ -11,6 +11,6 @@ macro_rules! stub {
 pub mod install;
 pub mod uninstall;
 pub mod init;
-stub!(doctor);
+pub mod doctor;
 stub!(update);
 pub mod config_cmd;
