@@ -10,7 +10,7 @@ macro_rules! stub {
 }
 stub!(install);
 stub!(uninstall);
-stub!(init);
+pub mod init;
 stub!(doctor);
 stub!(update);
-stub!(config_cmd);
+pub mod config_cmd;
