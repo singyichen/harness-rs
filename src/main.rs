@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod hooks;
+mod state;
 
 use clap::{Parser, Subcommand};
 
