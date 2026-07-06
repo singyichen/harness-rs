@@ -11,9 +11,9 @@ pub struct Manifest {
     pub files: BTreeMap<String, String>,
 }
 
-pub fn sha256_hex(text: &str) -> String {
+pub fn sha256_hex(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
-    h.update(text.as_bytes());
+    h.update(bytes);
     format!("{:x}", h.finalize())
 }
 

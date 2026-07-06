@@ -35,7 +35,7 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
             let target = claude_dir.join(rel_path);
             match std::fs::read_to_string(&target) {
                 Err(_) => {} // already gone
-                Ok(current) if sha256_hex(&current) == *recorded_hash => {
+                Ok(current) if sha256_hex(current.as_bytes()) == *recorded_hash => {
                     std::fs::remove_file(&target)?;
                     actions.push(format!("deleted {rel_path}"));
                 }

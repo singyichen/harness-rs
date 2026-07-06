@@ -61,7 +61,10 @@ pub fn check(claude_dir: &Path) -> Report {
                     )),
                     Ok(current) => {
                         let recorded = m.files.get(asset.rel_path);
-                        if recorded.map(|h| *h == sha256_hex(&current)).unwrap_or(false) {
+                        if recorded
+                            .map(|h| *h == sha256_hex(current.as_bytes()))
+                            .unwrap_or(false)
+                        {
                             // matches the official copy; stay silent
                         } else {
                             r.warnings.push(format!(

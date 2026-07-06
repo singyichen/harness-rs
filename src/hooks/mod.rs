@@ -17,7 +17,11 @@ pub fn run(event: &str) -> i32 {
         dispatch(event, &payload)
     }));
     if let Ok(Some(output)) = result {
-        println!("{output}");
+        // Write via a Result-returning API instead of println! so that a
+        // stdout write failure (e.g. broken pipe) cannot panic and cannot
+        // turn into a non-zero exit — hooks must always fail open.
+        use std::io::Write;
+        let _ = writeln!(std::io::stdout(), "{output}");
     }
     0
 }

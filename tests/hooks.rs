@@ -10,7 +10,16 @@ fn run_hook(event: &str, stdin: &str) -> assert_cmd::assert::Assert {
 
 #[test]
 fn session_start_injects_protocol_and_gate_summary() {
-    run_hook("session-start", r#"{"cwd": "/nonexistent"}"#)
+    // Use an isolated $HOME so this test can't pick up a real, possibly
+    // strict, global ~/.claude/harness/config.toml and falsely fail the
+    // "advisory" (built-in default mode) assertion below.
+    let tmp = tempfile::tempdir().unwrap();
+    Command::cargo_bin("harness")
+        .unwrap()
+        .env("HOME", tmp.path())
+        .args(["hook", "session-start"])
+        .write_stdin(r#"{"cwd": "/nonexistent"}"#)
+        .assert()
         .success()
         .stdout(predicate::str::contains("HARNESS-PROTOCOL"))
         .stdout(predicate::str::contains("advisory")); // built-in default mode
