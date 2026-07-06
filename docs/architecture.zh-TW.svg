@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="770" viewBox="0 0 880 770" font-family="system-ui, -apple-system, 'PingFang TC', 'Noto Sans TC', sans-serif">
+  <style>
+    .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+    .title { font-size: 12px; font-weight: 700; letter-spacing: .08em; fill: #26221F; }
+    .sub { font-size: 11px; fill: #6B6259; font-weight: 400; letter-spacing: 0; }
+    .name { font-size: 12.5px; font-weight: 600; fill: #26221F; }
+    .desc { font-size: 11px; fill: #6B6259; }
+    .pill { font-size: 11.5px; fill: #C2532B; }
+    .accent { fill: #C2532B; }
+  </style>
+
+  <rect x="0" y="0" width="880" height="770" fill="#F6F4F2"/>
+
+  <!-- Band 1: Claude Code session -->
+  <rect x="20" y="16" width="840" height="150" rx="10" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="36" y="42" class="mono title">CLAUDE CODE SESSION <tspan class="sub">— 每個事件都會呼叫 harness</tspan></text>
+
+  <rect x="32" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="44" y="78" class="mono name">SessionStart</text>
+  <text x="44" y="98" class="desc">注入行為協議(OODA、抗辯、</text>
+  <text x="44" y="114" class="desc">DoD)+ 當前閘門模式</text>
+
+  <rect x="236" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="248" y="78" class="mono name">UserPromptSubmit</text>
+  <text x="248" y="98" class="desc">每則訊息附一行</text>
+  <text x="248" y="114" class="desc">紀律微提醒 🧭</text>
+
+  <rect x="440" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="452" y="78" class="mono name">PostToolUse</text>
+  <text x="452" y="98" class="desc">記錄程式碼修改與測試執行</text>
+  <text x="452" y="114" class="desc">(Edit / Write / Bash)</text>
+
+  <rect x="644" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="656" y="78" class="mono name">Stop</text>
+  <text x="656" y="98" class="desc">驗證閘門:改了碼卻沒測試,</text>
+  <text x="656" y="114" class="desc">依模式擋下或警告</text>
+
+  <!-- Arrow 1 -->
+  <line x1="440" y1="166" x2="440" y2="174" stroke="#C2532B" stroke-width="1.5"/>
+  <rect x="290" y="176" width="300" height="22" rx="11" fill="#C2532B" opacity="0.1"/>
+  <text x="440" y="191" text-anchor="middle" class="mono pill">harness hook &lt;event&gt; · stdin JSON</text>
+  <line x1="440" y1="200" x2="440" y2="206" stroke="#C2532B" stroke-width="1.5"/>
+  <polygon points="434,206 446,206 440,214" fill="#C2532B"/>
+
+  <!-- Band 2: the binary -->
+  <rect x="20" y="214" width="840" height="150" rx="10" fill="#FFFFFF" stroke="#C2532B" stroke-width="1.5"/>
+  <text x="36" y="240" class="mono title" fill="#C2532B">HARNESS — 單一 RUST BINARY <tspan class="sub">— fail-open:內部錯誤一律放行,絕不弄壞 session</tspan></text>
+
+  <rect x="32" y="254" width="260" height="94" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="44" y="276" class="mono name">Hook 引擎</text>
+  <text x="44" y="296" class="desc">分派四個事件;panic 捕捉、</text>
+  <text x="44" y="312" class="desc">靜音、exit 0</text>
+
+  <rect x="306" y="254" width="260" height="94" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="318" y="276" class="mono name">分層設定</text>
+  <text x="318" y="296" class="desc">內建預設 → 全域 config.toml →</text>
+  <text x="318" y="312" class="desc">專案 harness.toml(往上找最近的)</text>
+
+  <rect x="580" y="254" width="260" height="94" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="592" y="276" class="mono name">Session 狀態</text>
+  <text x="592" y="296" class="desc">序列號追蹤「最後改碼 vs 最後測試」;</text>
+  <text x="592" y="312" class="desc">跑過測試即清空改動清單</text>
+
+  <!-- Arrow 2 -->
+  <line x1="440" y1="364" x2="440" y2="372" stroke="#C2532B" stroke-width="1.5"/>
+  <rect x="250" y="374" width="380" height="22" rx="11" fill="#C2532B" opacity="0.1"/>
+  <text x="440" y="389" text-anchor="middle" class="mono pill">install / update / uninstall · SHA-256 manifest 守護你的客製</text>
+  <line x1="440" y1="398" x2="440" y2="404" stroke="#C2532B" stroke-width="1.5"/>
+  <polygon points="434,404 446,404 440,412" fill="#C2532B"/>
+
+  <!-- Band 3: released assets -->
+  <rect x="20" y="412" width="840" height="160" rx="10" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="36" y="438" class="mono title">~/.claude/ 釋出資產 <tspan class="sub">— 你改過的檔案永遠不被覆蓋</tspan></text>
+
+  <rect x="32" y="452" width="260" height="104" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="44" y="474" class="mono name">harness/protocol.md</text>
+  <text x="44" y="494" class="desc">行為協議本體,</text>
+  <text x="44" y="510" class="desc">SessionStart 時整份注入</text>
+
+  <rect x="306" y="452" width="260" height="104" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="318" y="474" class="mono name">skills/adversarial-review</text>
+  <text x="318" y="494" class="desc">多方抗辯:反方小組並行審查,</text>
+  <text x="318" y="510" class="desc">過半存活才採信</text>
+
+  <rect x="580" y="452" width="260" height="104" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
+  <text x="592" y="474" class="mono name">agents/ — 五個反方鏡頭</text>
+  <!-- chips row 1 (default panel, accent) -->
+  <rect x="592" y="484" width="62" height="18" rx="9" fill="#C2532B" opacity="0.1"/>
+  <text x="623" y="497" text-anchor="middle" class="mono" font-size="10.5" fill="#C2532B">skeptic</text>
+  <rect x="660" y="484" width="68" height="18" rx="9" fill="#C2532B" opacity="0.1"/>
+  <text x="694" y="497" text-anchor="middle" class="mono" font-size="10.5" fill="#C2532B">red-team</text>
+  <rect x="734" y="484" width="80" height="18" rx="9" fill="#C2532B" opacity="0.1"/>
+  <text x="774" y="497" text-anchor="middle" class="mono" font-size="10.5" fill="#C2532B">simplifier</text>
+  <!-- chips row 2 -->
+  <rect x="592" y="508" width="118" height="18" rx="9" fill="none" stroke="#DDD6D0"/>
+  <text x="651" y="521" text-anchor="middle" class="mono" font-size="10.5" fill="#6B6259">evidence-auditor</text>
+  <rect x="716" y="508" width="100" height="18" rx="9" fill="none" stroke="#DDD6D0"/>
+  <text x="766" y="521" text-anchor="middle" class="mono" font-size="10.5" fill="#6B6259">user-advocate</text>
+  <text x="592" y="546" class="desc">橘底 = 預設小組;[review].panel 可調</text>
+
+  <!-- Verify gate strip -->
+  <text x="20" y="612" class="mono" font-size="14" font-weight="700" fill="#26221F">驗證閘門(Stop hook)</text>
+
+  <rect x="20" y="628" width="170" height="56" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="34" y="650" class="name" font-size="12.5">改了程式碼</text>
+  <text x="34" y="670" class="desc" font-size="10.5">code_globs 命中、非豁免</text>
+
+  <text x="200" y="660" class="desc" font-size="13">→</text>
+
+  <rect x="222" y="628" width="186" height="56" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <text x="236" y="650" class="name" font-size="12.5">之後跑過測試?</text>
+  <text x="236" y="670" class="desc" font-size="10.5">test_commands 子字串比對</text>
+
+  <text x="418" y="660" class="desc" font-size="12">→ 沒有 →</text>
+
+  <!-- gate modes -->
+  <rect x="482" y="622" width="378" height="26" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <rect x="482" y="622" width="4" height="26" rx="2" fill="#B3372E"/>
+  <text x="496" y="639" class="mono" font-size="11" font-weight="700" fill="#B3372E">strict</text>
+  <text x="556" y="639" class="desc" font-size="10.5">擋下一次,點名未驗證檔案;說明後第二次放行</text>
+
+  <rect x="482" y="654" width="378" height="26" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <rect x="482" y="654" width="4" height="26" rx="2" fill="#9A6B0F"/>
+  <text x="496" y="671" class="mono" font-size="11" font-weight="700" fill="#9A6B0F">advisory</text>
+  <text x="556" y="671" class="desc" font-size="10.5">預設:附警告放行</text>
+
+  <rect x="482" y="686" width="378" height="26" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
+  <rect x="482" y="686" width="4" height="26" rx="2" fill="#7A756F"/>
+  <text x="496" y="703" class="mono" font-size="11" font-weight="700" fill="#7A756F">off</text>
+  <text x="556" y="703" class="desc" font-size="10.5">不檢查</text>
+
+  <!-- footer -->
+  <line x1="20" y1="732" x2="860" y2="732" stroke="#DDD6D0"/>
+  <text x="20" y="754" class="desc" font-size="11">生命週期 install · doctor · update · uninstall · init · config&#160;&#160;&#160;&#160;安全 時間戳備份 · 原子寫入 · 只增不覆&#160;&#160;&#160;&#160;測試 50 unit + 9 integration/E2E</text>
+</svg>
