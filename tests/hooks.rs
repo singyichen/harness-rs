@@ -29,3 +29,33 @@ fn hooks_fail_open_on_garbage_stdin() {
     run_hook("session-start", "not json at all").success();
     run_hook("user-prompt", "").success();
 }
+
+#[test]
+fn stop_gate_end_to_end_strict_block() {
+    // Arrange: use post-tool to create a "changed code, no test" state, then hit stop
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tmp.path().join("harness.toml"),
+        "[gates.verify]\nmode = \"strict\"",
+    )
+    .unwrap();
+    let sid = "e2e-strict-block";
+    let cwd = tmp.path().to_str().unwrap();
+    run_hook(
+        "post-tool",
+        &format!(
+            r#"{{"session_id":"{sid}","cwd":"{cwd}","tool_name":"Edit","tool_input":{{"file_path":"{cwd}/src/x.rs"}}}}"#
+        ),
+    )
+    .success();
+    run_hook(
+        "stop",
+        &format!(r#"{{"session_id":"{sid}","cwd":"{cwd}","stop_hook_active":false}}"#),
+    )
+    .success()
+    .stdout(predicate::str::contains("\"decision\":\"block\""));
+    // Clean up the state file so reruns are not polluted
+    let _ = std::fs::remove_file(
+        std::env::temp_dir().join("harness-state").join(format!("{sid}.json")),
+    );
+}
