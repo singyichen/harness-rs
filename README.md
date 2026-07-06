@@ -4,7 +4,7 @@
 
 [繁體中文](README.zh-TW.md)
 
-![harness architecture](docs/architecture.svg)
+![harness architecture](docs/architecture.png)
 
 ## What is it
 

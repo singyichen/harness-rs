@@ -17,12 +17,12 @@
   <rect x="32" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
   <text x="44" y="78" class="mono name">SessionStart</text>
   <text x="44" y="98" class="desc">Injects the behavior protocol</text>
-  <text x="44" y="114" class="desc">(OODA, review, DoD) + gate modes</text>
+  <text x="44" y="114" class="desc">and the active gate modes</text>
 
   <rect x="236" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
   <text x="248" y="78" class="mono name">UserPromptSubmit</text>
   <text x="248" y="98" class="desc">One-line discipline nudge</text>
-  <text x="248" y="114" class="desc">on every message 🧭</text>
+  <text x="248" y="114" class="desc">on every message</text>
 
   <rect x="440" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
   <text x="452" y="78" class="mono name">PostToolUse</text>
@@ -32,7 +32,7 @@
   <rect x="644" y="56" width="192" height="94" rx="8" fill="#F6F4F2" stroke="#DDD6D0"/>
   <text x="656" y="78" class="mono name">Stop</text>
   <text x="656" y="98" class="desc">Verify gate: code changed but</text>
-  <text x="656" y="114" class="desc">untested → block or warn by mode</text>
+  <text x="656" y="114" class="desc">untested → block or warn</text>
 
   <!-- Arrow 1 -->
   <line x1="440" y1="166" x2="440" y2="174" stroke="#C2532B" stroke-width="1.5"/>
@@ -116,7 +116,7 @@
   <rect x="482" y="622" width="378" height="26" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
   <rect x="482" y="622" width="4" height="26" rx="2" fill="#B3372E"/>
   <text x="496" y="639" class="mono" font-size="11" font-weight="700" fill="#B3372E">strict</text>
-  <text x="556" y="639" class="desc" font-size="10.5">blocks once, names unverified files; explain → 2nd stop passes</text>
+  <text x="556" y="639" class="desc" font-size="10.5">blocks once, names files; explain → 2nd stop passes</text>
 
   <rect x="482" y="654" width="378" height="26" rx="8" fill="#FFFFFF" stroke="#DDD6D0"/>
   <rect x="482" y="654" width="4" height="26" rx="2" fill="#9A6B0F"/>

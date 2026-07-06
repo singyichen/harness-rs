@@ -4,7 +4,7 @@
 
 [English README](README.md)
 
-![harness 架構圖](docs/architecture.zh-TW.svg)
+![harness 架構圖](docs/architecture.zh-TW.png)
 
 ## 這是什麼
 
