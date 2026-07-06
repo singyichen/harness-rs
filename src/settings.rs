@@ -70,7 +70,6 @@ fn group_has_marker(group: &Value) -> bool {
 
 pub fn register_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
     let mut map = load_settings(settings_path)?;
-    backup(settings_path)?;
     let hooks = map
         .entry("hooks".to_string())
         .or_insert_with(|| json!({}));
@@ -78,6 +77,7 @@ pub fn register_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
         .as_object_mut()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "hooks field is not an object"))?;
     let mut actions = Vec::new();
+    let mut changed = false;
     for (event, matcher, cmd) in HOOK_EVENTS {
         let arr = hooks
             .entry(event.to_string())
@@ -95,15 +95,22 @@ pub fn register_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
         }
         arr.push(group);
         actions.push(format!("{event}: registered `{cmd}`"));
+        changed = true;
     }
-    atomic_write(settings_path, &map)?;
+    // Only touch disk when something actually changed: a timestamped backup
+    // must always precede a modification, but a no-op re-run must not
+    // litter the directory with backups or rewrite an unchanged file.
+    if changed {
+        backup(settings_path)?;
+        atomic_write(settings_path, &map)?;
+    }
     Ok(actions)
 }
 
 pub fn unregister_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
     let mut map = load_settings(settings_path)?;
-    backup(settings_path)?;
     let mut actions = Vec::new();
+    let mut changed = false;
     if let Some(hooks) = map.get_mut("hooks").and_then(|h| h.as_object_mut()) {
         let events: Vec<String> = hooks.keys().cloned().collect();
         for event in events {
@@ -112,6 +119,7 @@ pub fn unregister_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
                 arr.retain(|g| !group_has_marker(g));
                 if arr.len() != before {
                     actions.push(format!("{event}: removed harness hook"));
+                    changed = true;
                 }
                 if arr.is_empty() {
                     hooks.remove(&event);
@@ -122,7 +130,11 @@ pub fn unregister_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
             map.remove("hooks");
         }
     }
-    atomic_write(settings_path, &map)?;
+    // Same rule as register_hooks: no change, no backup, no write.
+    if changed {
+        backup(settings_path)?;
+        atomic_write(settings_path, &map)?;
+    }
     Ok(actions)
 }
 
@@ -196,6 +208,23 @@ mod tests {
         register_hooks(&p).unwrap();
         let v = read_json(&p);
         assert_eq!(v["hooks"]["Stop"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn register_twice_creates_only_one_backup() {
+        // The second register_hooks call is a no-op (all events already
+        // registered), so it must not create another timestamped backup
+        // or rewrite settings.json.
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("settings.json");
+        std::fs::write(&p, r#"{"model":"opus"}"#).unwrap();
+        register_hooks(&p).unwrap();
+        register_hooks(&p).unwrap();
+        let backups: Vec<_> = std::fs::read_dir(tmp.path()).unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("settings.json.bak."))
+            .collect();
+        assert_eq!(backups.len(), 1, "no-op re-run must not create another backup");
     }
 
     #[test]
