@@ -115,9 +115,24 @@ pub fn unregister_hooks(settings_path: &Path) -> io::Result<Vec<String>> {
         let events: Vec<String> = hooks.keys().cloned().collect();
         for event in events {
             if let Some(arr) = hooks.get_mut(&event).and_then(|v| v.as_array_mut()) {
-                let before = arr.len();
-                arr.retain(|g| !group_has_marker(g));
-                if arr.len() != before {
+                let mut removed = false;
+                // Remove only our marker commands, not whole matcher groups: a
+                // user may have added their own hook to a group we created.
+                arr.retain_mut(|group| {
+                    let Some(hs) = group.get_mut("hooks").and_then(|v| v.as_array_mut()) else {
+                        return true; // unknown shape — preserve untouched
+                    };
+                    let before = hs.len();
+                    hs.retain(|h| {
+                        !h["command"].as_str().map_or(false, |c| c.contains(HOOK_MARKER))
+                    });
+                    if hs.len() != before {
+                        removed = true;
+                    }
+                    // Drop the group only if removing ours emptied it
+                    !hs.is_empty() || before == 0
+                });
+                if removed {
                     actions.push(format!("{event}: removed harness hook"));
                     changed = true;
                 }
@@ -240,6 +255,25 @@ mod tests {
         assert_eq!(stops[0]["hooks"][0]["command"], "other-tool check");
         // Our other event keys were emptied and removed
         assert!(v["hooks"].get("SessionStart").is_none());
+    }
+
+    #[test]
+    fn unregister_keeps_sibling_hooks_in_same_group() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("settings.json");
+        // A user hook living in the SAME matcher group as ours must survive
+        std::fs::write(&p, r#"{"hooks":{"Stop":[{"hooks":[
+            {"type":"command","command":"harness hook stop"},
+            {"type":"command","command":"my-own-tool check"}
+        ]}]}}"#).unwrap();
+        unregister_hooks(&p).unwrap();
+        let v = read_json(&p);
+        let stops = v["hooks"]["Stop"].as_array().unwrap();
+        assert_eq!(stops.len(), 1);
+        let cmds: Vec<_> = stops[0]["hooks"].as_array().unwrap().iter()
+            .map(|h| h["command"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(cmds, vec!["my-own-tool check".to_string()]);
     }
 
     #[test]

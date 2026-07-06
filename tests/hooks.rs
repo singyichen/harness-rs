@@ -41,7 +41,9 @@ fn hooks_fail_open_on_garbage_stdin() {
 
 #[test]
 fn stop_gate_end_to_end_strict_block() {
-    // Arrange: use post-tool to create a "changed code, no test" state, then hit stop
+    // Arrange: use post-tool to create a "changed code, no test" state, then hit stop.
+    // $HOME is isolated so session state lands in the tempdir, not the real
+    // ~/.claude/harness/state, and no real global config can interfere.
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(
         tmp.path().join("harness.toml"),
@@ -50,21 +52,24 @@ fn stop_gate_end_to_end_strict_block() {
     .unwrap();
     let sid = "e2e-strict-block";
     let cwd = tmp.path().to_str().unwrap();
-    run_hook(
+    let run_hook_at_home = |event: &str, stdin: &str| {
+        Command::cargo_bin("harness").unwrap()
+            .env("HOME", tmp.path())
+            .args(["hook", event])
+            .write_stdin(stdin.to_string())
+            .assert()
+    };
+    run_hook_at_home(
         "post-tool",
         &format!(
             r#"{{"session_id":"{sid}","cwd":"{cwd}","tool_name":"Edit","tool_input":{{"file_path":"{cwd}/src/x.rs"}}}}"#
         ),
     )
     .success();
-    run_hook(
+    run_hook_at_home(
         "stop",
         &format!(r#"{{"session_id":"{sid}","cwd":"{cwd}","stop_hook_active":false}}"#),
     )
     .success()
     .stdout(predicate::str::contains("\"decision\":\"block\""));
-    // Clean up the state file so reruns are not polluted
-    let _ = std::fs::remove_file(
-        std::env::temp_dir().join("harness-state").join(format!("{sid}.json")),
-    );
 }

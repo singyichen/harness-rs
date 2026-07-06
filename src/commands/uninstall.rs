@@ -33,9 +33,14 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
     if let Some(manifest) = Manifest::load(claude_dir) {
         for (rel_path, recorded_hash) in &manifest.files {
             let target = claude_dir.join(rel_path);
-            match std::fs::read_to_string(&target) {
-                Err(_) => {} // already gone
-                Ok(current) if sha256_hex(current.as_bytes()) == *recorded_hash => {
+            match std::fs::read(&target) {
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {} // already gone
+                Err(e) => {
+                    actions.push(format!(
+                        "warning: could not read {rel_path} ({e}); keeping it"
+                    ));
+                }
+                Ok(current) if sha256_hex(&current) == *recorded_hash => {
                     std::fs::remove_file(&target)?;
                     actions.push(format!("deleted {rel_path}"));
                 }
@@ -74,6 +79,17 @@ mod tests {
         install_to(tmp.path()).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, "the user's own version").unwrap();
+        let actions = uninstall_from(tmp.path()).unwrap();
+        assert!(target.exists());
+        assert!(actions.iter().any(|a| a.contains("skeptic.md")));
+    }
+
+    #[test]
+    fn uninstall_keeps_non_utf8_modified_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let target = tmp.path().join("agents/skeptic.md");
+        std::fs::write(&target, [0xFF, 0xFE, 0x00]).unwrap();
         let actions = uninstall_from(tmp.path()).unwrap();
         assert!(target.exists());
         assert!(actions.iter().any(|a| a.contains("skeptic.md")));

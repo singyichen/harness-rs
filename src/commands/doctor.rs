@@ -54,15 +54,21 @@ pub fn check(claude_dir: &Path) -> Report {
             // 3. Asset presence and customization status
             for asset in ASSETS {
                 let target = claude_dir.join(asset.rel_path);
-                match std::fs::read_to_string(&target) {
-                    Err(_) => r.problems.push(format!(
-                        "missing {} — run harness install",
+                match std::fs::read(&target) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        r.problems.push(format!(
+                            "missing {} — run harness install",
+                            asset.rel_path
+                        ))
+                    }
+                    Err(e) => r.problems.push(format!(
+                        "could not read {} ({e})",
                         asset.rel_path
                     )),
                     Ok(current) => {
                         let recorded = m.files.get(asset.rel_path);
                         if recorded
-                            .map(|h| *h == sha256_hex(current.as_bytes()))
+                            .map(|h| *h == sha256_hex(&current))
                             .unwrap_or(false)
                         {
                             // matches the official copy; stay silent
@@ -140,6 +146,16 @@ mod tests {
         std::fs::write(tmp.path().join("agents/skeptic.md"), "modified").unwrap();
         let r = check(tmp.path());
         assert!(r.problems.is_empty());
+        assert!(r.warnings.iter().any(|w| w.contains("skeptic.md")));
+    }
+
+    #[test]
+    fn non_utf8_asset_is_warning_not_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        std::fs::write(tmp.path().join("agents/skeptic.md"), [0xFF, 0xFE, 0x00]).unwrap();
+        let r = check(tmp.path());
+        assert!(r.problems.is_empty(), "{:?}", r.problems);
         assert!(r.warnings.iter().any(|w| w.contains("skeptic.md")));
     }
 

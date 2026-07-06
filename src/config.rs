@@ -191,11 +191,14 @@ impl VerifyGate {
             .ok()
             .and_then(|p| p.to_str())
             .unwrap_or(path);
+        // Globs use `/` separators; Windows paths arrive with `\`.
+        let path = path.replace('\\', "/");
+        let rel = rel.replace('\\', "/");
         let hit = |globs: &[String]| {
             globs
                 .iter()
                 .filter_map(|g| glob::Pattern::new(g).ok())
-                .any(|p| p.matches(path) || p.matches(rel))
+                .any(|p| p.matches(&path) || p.matches(&rel))
         };
         hit(&self.code_globs) && !hit(&self.exempt_globs)
     }
@@ -277,6 +280,15 @@ mod tests {
         assert!(v.is_code_file("src/lib.py", cwd)); // relative paths work too
         assert!(!v.is_code_file("/proj/docs/guide.md", cwd)); // exempt
         assert!(!v.is_code_file("/proj/notes.txt", cwd)); // not code
+    }
+
+    #[test]
+    fn code_file_matching_with_backslash_separators() {
+        let v = Config::builtin().verify;
+        let cwd = Path::new("/proj");
+        // Windows-style separators are normalized before glob matching
+        assert!(v.is_code_file("src\\main.rs", cwd));
+        assert!(!v.is_code_file("docs\\guide.md", cwd));
     }
 
     #[test]

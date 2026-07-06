@@ -31,9 +31,9 @@ fn full_lifecycle_install_doctor_uninstall() {
 #[test]
 fn hook_stop_fails_open_with_corrupt_state() {
     let tmp = tempfile::tempdir().unwrap();
-    // Plant a corrupt state file
+    // Plant a corrupt state file in the isolated $HOME's state dir
     let sid = "e2e-corrupt";
-    let dir = std::env::temp_dir().join("harness-state");
+    let dir = tmp.path().join(".claude/harness/state");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(format!("{sid}.json")), "{{{broken").unwrap();
     Command::cargo_bin("harness").unwrap()
@@ -43,7 +43,6 @@ fn hook_stop_fails_open_with_corrupt_state() {
         .assert()
         .success()
         .stdout(""); // corrupt state → treated as clean → allow with no output
-    let _ = std::fs::remove_file(dir.join(format!("{sid}.json")));
 }
 
 #[test]
@@ -69,7 +68,4 @@ fn advisory_mode_warns_end_to_end() {
         .assert()
         .success()
         .stdout(predicate::str::contains("systemMessage"));
-    let _ = std::fs::remove_file(
-        std::env::temp_dir().join("harness-state").join(format!("{sid}.json")),
-    );
 }

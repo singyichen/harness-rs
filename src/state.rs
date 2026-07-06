@@ -38,8 +38,11 @@ pub fn state_path(session_id: &str) -> PathBuf {
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect();
-    std::env::temp_dir()
-        .join("harness-state")
+    // Per-user location: a world-shared dir like /tmp/harness-state invites
+    // symlink attacks and first-user-owns-it permission conflicts.
+    dirs::home_dir()
+        .map(|h| h.join(".claude").join("harness").join("state"))
+        .unwrap_or_else(|| std::env::temp_dir().join("harness-state"))
         .join(format!("{safe}.json"))
 }
 
@@ -125,6 +128,12 @@ mod tests {
         let p = state_path("../../evil/../id_1-2");
         let name = p.file_name().unwrap().to_str().unwrap();
         assert_eq!(name, "evilid_1-2.json"); // only [A-Za-z0-9_-] survives
-        assert!(p.parent().unwrap().ends_with("harness-state"));
+    }
+
+    #[test]
+    fn state_path_is_per_user() {
+        let p = state_path("s1");
+        let home = dirs::home_dir().unwrap();
+        assert!(p.starts_with(home.join(".claude").join("harness").join("state")));
     }
 }
