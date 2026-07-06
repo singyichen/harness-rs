@@ -9,7 +9,7 @@ macro_rules! stub {
     };
 }
 pub mod install;
-stub!(uninstall);
+pub mod uninstall;
 stub!(init);
 stub!(doctor);
 stub!(update);
