@@ -1,5 +1,6 @@
 use std::io::Read;
 
+pub mod post_tool_use;
 pub mod prompt_nudge;
 pub mod session_start;
 
@@ -22,6 +23,7 @@ pub fn run(event: &str) -> i32 {
 
 fn dispatch(event: &str, payload: &serde_json::Value) -> Option<String> {
     match event {
+        "post-tool" => post_tool_use::run(payload),
         "session-start" => session_start::run(payload),
         "user-prompt" => prompt_nudge::run(payload),
         _ => None,
