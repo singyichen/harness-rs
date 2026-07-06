@@ -1,5 +1,8 @@
 use std::io::Read;
 
+pub mod prompt_nudge;
+pub mod session_start;
+
 /// Hook engine entry point. Iron rule: any internal error results in
 /// allowing the action (exit 0, no output).
 pub fn run(event: &str) -> i32 {
@@ -17,9 +20,10 @@ pub fn run(event: &str) -> i32 {
     0
 }
 
-fn dispatch(event: &str, _payload: &serde_json::Value) -> Option<String> {
+fn dispatch(event: &str, payload: &serde_json::Value) -> Option<String> {
     match event {
-        // Later tasks wire up session-start / user-prompt / post-tool / stop
+        "session-start" => session_start::run(payload),
+        "user-prompt" => prompt_nudge::run(payload),
         _ => None,
     }
 }
