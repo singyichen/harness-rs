@@ -8,8 +8,8 @@ macro_rules! stub {
         }
     };
 }
-stub!(install);
-stub!(uninstall);
+pub mod install;
+pub mod uninstall;
 pub mod init;
 stub!(doctor);
 stub!(update);
