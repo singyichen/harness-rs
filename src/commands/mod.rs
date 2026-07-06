@@ -12,5 +12,5 @@ pub mod install;
 stub!(uninstall);
 stub!(init);
 stub!(doctor);
-stub!(update);
+pub mod update;
 stub!(config_cmd);
