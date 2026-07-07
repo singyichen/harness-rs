@@ -137,8 +137,9 @@ Claude Code de-duplicates them and each hook fires once. `doctor`,
 install. The released files show up in git status — commit them to share
 the setup with your team, or add them to `.gitignore`.
 
-The injected protocol resolves nearest-wins, like the config layers:
-`<project>/.claude/harness/protocol.md` → `~/.claude/harness/protocol.md`
+The injected protocol resolves in a fixed order — it does not walk up
+parent directories like the config layers do:
+`<cwd>/.claude/harness/protocol.md` (session cwd) → `~/.claude/harness/protocol.md`
 → the embedded copy.
 
 `harness doctor` runs four classes of checks: binary-vs-installed version

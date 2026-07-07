@@ -118,9 +118,9 @@ harness doctor     # 體檢
 出現在 git status——commit 進 repo 可與團隊共享這套設定，不想共享就
 加進 `.gitignore`。
 
-注入的行為協議與設定分層一樣採「最近的贏」：
-`<專案>/.claude/harness/protocol.md` → `~/.claude/harness/protocol.md`
-→ 內嵌版。
+注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找：
+`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd）→
+`~/.claude/harness/protocol.md` → 內嵌版。
 
 `harness doctor` 執行四類檢查:binary 與已安裝資產的版本一致性、資產是否
 齊全與客製狀態(你改過的檔案算警告,不算錯誤)、四個 hooks 是否全數註冊、
