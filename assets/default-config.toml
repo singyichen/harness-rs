@@ -1,0 +1,20 @@
+# Harness global config (~/.claude/harness/config.toml)
+# A project can override any field with a harness.toml in its root directory.
+# Fields not listed here use built-in defaults; run `harness config` to see
+# the merged result.
+
+[gates.verify]
+# strict = block unverified turn endings / advisory = warn but allow / off
+mode = "advisory"
+# What counts as "ran the tests" (substring match). Uncomment to override
+# the built-in list:
+# test_commands = ["cargo test", "pytest", "npm test"]
+# What counts as a "code change":
+# code_globs = ["**/*.rs", "**/*.py"]
+# Changes to these never trigger the gate:
+# exempt_globs = ["**/docs/**", "**/*.md"]
+
+[review]
+# Adversarial review panel (harness install provides all five agents)
+panel = ["skeptic", "red-team", "simplifier"]
+# Full panel: ["skeptic", "red-team", "simplifier", "evidence-auditor", "user-advocate"]

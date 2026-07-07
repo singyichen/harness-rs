@@ -1,5 +1,10 @@
 mod commands;
+mod config;
 mod hooks;
+mod settings;
+mod state;
+mod assets;
+mod manifest;
 
 use clap::{Parser, Subcommand};
 
