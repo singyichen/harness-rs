@@ -65,7 +65,8 @@ harness 想補上的落差。
 - **精準的「上次測試後改了什麼」追蹤**——用序號記錄最後一次程式碼修改與
   最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,
   能明確列出還沒驗證的檔案。測試指令採子字串比對:
-  `cd backend && cargo test --all` 也算數。
+  `cd backend && cargo test --all` 也算數;但引號內的提及不算——
+  `git commit -m "make cargo test pass"` 不會被當成測試執行。
 - **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出資產
   的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是
   **你**改過的——也是「你的客製優先」背後的機制。
@@ -155,5 +156,5 @@ user-advocate)+ `adversarial-review` skill,重大結論過半存活才採信。
   建立。
 - **你的客製優先**:install/update/uninstall 都不會覆蓋或刪除你改過的檔案。
 
-以上全部由 50 個單元測試加 9 個整合/E2E 測試把關,涵蓋完整的
+以上全部由單元測試套件加整合/E2E 測試把關,涵蓋完整的
 install → doctor → update → uninstall 生命週期。

@@ -80,8 +80,9 @@ hook time, and every hook call is a millisecond-level native execution.
 - **Precise "changed since last test" tracking** — sequence numbers record
   the last code change vs. the last test run, and a test run clears the
   changed-file list, so when strict mode blocks, it names exactly the
-  files still unverified. Test-command detection is substring-based:
-  `cd backend && cargo test --all` counts.
+  files still unverified. Test-command detection is substring-based —
+  `cd backend && cargo test --all` counts — but quoted mentions don't:
+  `git commit -m "make cargo test pass"` is not a test run.
 - **SHA-256 manifest** — `~/.claude/harness/manifest.json` records the
   official hash of every released asset. That's how install / update /
   uninstall / doctor know whether *you* modified a file — the mechanism
@@ -183,5 +184,5 @@ membership is set via `[review].panel`.
 - **Your customizations win**: install/update/uninstall never overwrite or
   delete files you have modified.
 
-All of this is covered by 50 unit tests plus 9 integration/E2E tests that
+All of this is covered by a unit-test suite plus integration/E2E tests that
 exercise the full install → doctor → update → uninstall lifecycle.
