@@ -120,6 +120,13 @@ harness doctor     # 體檢
 - `advisory`(預設):附警告放行
 - `off`:不檢查
 
+適用範圍:閘門追蹤的是 agent 透過檔案工具(Edit / Write / MultiEdit /
+NotebookEdit)所做的程式碼變更。任意 Bash 指令造成的檔案異動(`sed -i`、
+輸出重導向、腳本)不在追蹤範圍——要可靠偵測,得在每次工具呼叫時對整個
+目錄樹做快照,或從指令字串猜測寫入行為,兩者都違背 hook 必須輕量、
+fail-open 的預算。閘門是給合作型 agent(本來就用檔案工具改檔)的紀律
+提示,不是安全邊界。
+
 專案根目錄放 `harness.toml` 即可覆寫(`harness init` 產生範本)。專案設定
 會從 cwd 往上層目錄逐層尋找,最近的 `harness.toml` 優先,所以在 monorepo
 的子目錄下也能運作:

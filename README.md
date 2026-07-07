@@ -141,6 +141,14 @@ the gate reacts according to its mode:
 - `advisory` (default): warns but allows
 - `off`: no check
 
+Scope: the gate tracks code changes made through the agent's file tools
+(Edit / Write / MultiEdit / NotebookEdit). Mutations performed by arbitrary
+Bash commands (`sed -i`, output redirection, scripts) are not tracked —
+detecting them reliably would mean snapshotting the tree on every tool call
+or guessing writes from command strings, both at odds with the cheap,
+fail-open hook budget. The gate is a discipline nudge for a cooperative
+agent (which edits files through file tools), not a security boundary.
+
 Drop a `harness.toml` in a project root to override anything
 (`harness init` generates the template). The project config is discovered
 by walking up parent directories from the cwd — the nearest `harness.toml`
