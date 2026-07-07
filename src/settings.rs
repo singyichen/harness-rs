@@ -53,7 +53,17 @@ fn atomic_write(path: &Path, map: &Map<String, Value>) -> io::Result<()> {
         std::fs::create_dir_all(dir)?;
     }
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_string_pretty(&Value::Object(map.clone()))?)?;
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp)?;
+        // Inherit the existing file's permissions before writing any content:
+        // a user's restrictive settings.json (e.g. 0600) must not come back
+        // from the rename swap with umask-default permissions.
+        if let Ok(meta) = std::fs::metadata(path) {
+            f.set_permissions(meta.permissions())?;
+        }
+        f.write_all(serde_json::to_string_pretty(&Value::Object(map.clone()))?.as_bytes())?;
+    }
     std::fs::rename(&tmp, path)
 }
 
@@ -158,15 +168,18 @@ pub fn foreign_stop_hooks(settings_path: &Path) -> Vec<String> {
     let Ok(map) = load_settings(settings_path) else {
         return Vec::new();
     };
+    // Inspect every hook individually, not per group: a foreign hook living
+    // in the same matcher group as ours would otherwise go unreported.
     map.get("hooks")
         .and_then(|h| h.get("Stop"))
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter(|g| !group_has_marker(g))
                 .filter_map(|g| g["hooks"].as_array())
                 .flatten()
-                .filter_map(|h| h["command"].as_str().map(String::from))
+                .filter_map(|h| h["command"].as_str())
+                .filter(|c| !c.contains(HOOK_MARKER))
+                .map(String::from)
                 .collect()
         })
         .unwrap_or_default()
@@ -274,6 +287,33 @@ mod tests {
             .map(|h| h["command"].as_str().unwrap().to_string())
             .collect();
         assert_eq!(cmds, vec!["my-own-tool check".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_preserves_restrictive_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("settings.json");
+        std::fs::write(&p, "{}").unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+        register_hooks(&p).unwrap();
+        let mode = std::fs::metadata(&p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "rename swap must not loosen the user's mode");
+    }
+
+    #[test]
+    fn foreign_stop_hooks_detects_sibling_in_harness_group() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("settings.json");
+        // A foreign Stop hook in the SAME matcher group as ours must still
+        // be reported — the group containing our marker doesn't vouch for
+        // every hook inside it.
+        std::fs::write(&p, r#"{"hooks":{"Stop":[{"hooks":[
+            {"type":"command","command":"harness hook stop"},
+            {"type":"command","command":"python verify_gate.py"}
+        ]}]}}"#).unwrap();
+        assert_eq!(foreign_stop_hooks(&p), vec!["python verify_gate.py".to_string()]);
     }
 
     #[test]
