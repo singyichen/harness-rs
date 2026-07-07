@@ -65,7 +65,8 @@ harness 想補上的落差。
 - **精準的「上次測試後改了什麼」追蹤**——用序號記錄最後一次程式碼修改與
   最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,
   能明確列出還沒驗證的檔案。測試指令採子字串比對:
-  `cd backend && cargo test --all` 也算數。
+  `cd backend && cargo test --all` 也算數;但引號內的提及不算——
+  `git commit -m "make cargo test pass"` 不會被當成測試執行。
 - **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出資產
   的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是
   **你**改過的——也是「你的客製優先」背後的機制。
@@ -127,6 +128,13 @@ NotebookEdit)所做的程式碼變更。任意 Bash 指令造成的檔案異動(
 fail-open 的預算。閘門是給合作型 agent(本來就用檔案工具改檔)的紀律
 提示,不是安全邊界。
 
+「引號內提及不算數」這條規則刻意保守:包在引號 shell script 裡的測試執行
+(`bash -lc 'cargo test'`、`docker compose exec app sh -c 'pytest'`)也會被
+當成引號提及而不清空閘門——要把它跟 `sh -c 'echo "cargo test"'` 區分開,
+需要一個真正的 shell parser。閘門寧可多擋一次,也不靜默放行。若你的專案
+就是透過這類 wrapper 跑測試,把未加引號的 wrapper 前綴加進
+`test_commands`(例如 `"docker compose exec app"`)即可正常比對。
+
 專案根目錄放 `harness.toml` 即可覆寫(`harness init` 產生範本)。專案設定
 會從 cwd 往上層目錄逐層尋找,最近的 `harness.toml` 優先,所以在 monorepo
 的子目錄下也能運作:
@@ -155,5 +163,5 @@ user-advocate)+ `adversarial-review` skill,重大結論過半存活才採信。
   建立。
 - **你的客製優先**:install/update/uninstall 都不會覆蓋或刪除你改過的檔案。
 
-以上全部由 50 個單元測試加 9 個整合/E2E 測試把關,涵蓋完整的
+以上全部由單元測試套件加整合/E2E 測試把關,涵蓋完整的
 install → doctor → update → uninstall 生命週期。

@@ -50,8 +50,36 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
                     ));
                 }
             }
+            // `<name>.new` official copies are harness artifacts (released
+            // alongside customized files); clean removal deletes them too —
+            // but only while they still hold the recorded official content,
+            // since the user may have edited one while merging. A corrupt
+            // manifest entry ("..") may have no file name — skip it.
+            if let Some(file_name) = target.file_name() {
+                let new_copy = target
+                    .with_file_name(format!("{}.new", file_name.to_string_lossy()));
+                match std::fs::read(&new_copy) {
+                    Err(_) => {} // absent or unreadable: nothing to delete safely
+                    Ok(bytes) if sha256_hex(&bytes) == *recorded_hash => {
+                        std::fs::remove_file(&new_copy)?;
+                        actions.push(format!("deleted {rel_path}.new"));
+                    }
+                    Ok(_) => {
+                        actions.push(format!(
+                            "warning: {rel_path}.new was modified by you; keeping it"
+                        ));
+                    }
+                }
+            }
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
+    }
+    // Per-session verify-gate state is a harness artifact as well.
+    let state_dir = claude_dir.join("harness").join("state");
+    match std::fs::remove_dir_all(&state_dir) {
+        Ok(()) => actions.push("deleted harness/state".to_string()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => actions.push(format!("warning: could not remove harness/state ({e})")),
     }
     Ok(actions)
 }
@@ -93,6 +121,59 @@ mod tests {
         let actions = uninstall_from(tmp.path()).unwrap();
         assert!(target.exists());
         assert!(actions.iter().any(|a| a.contains("skeptic.md")));
+    }
+
+    #[test]
+    fn uninstall_removes_session_state_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let state_dir = tmp.path().join("harness/state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::write(state_dir.join("s1.json"), "{}").unwrap();
+        uninstall_from(tmp.path()).unwrap();
+        assert!(!state_dir.exists());
+    }
+
+    #[test]
+    fn uninstall_removes_official_new_copies() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let target = tmp.path().join("agents/skeptic.md");
+        std::fs::write(&target, "customized").unwrap();
+        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        let new_copy = tmp.path().join("agents/skeptic.md.new");
+        assert!(new_copy.is_file(), "precondition: .new copy exists");
+        uninstall_from(tmp.path()).unwrap();
+        assert!(!new_copy.exists(), ".new copies are harness artifacts");
+        assert!(target.exists(), "customized file still kept");
+    }
+
+    #[test]
+    fn uninstall_keeps_user_edited_new_copies() {
+        // A `.new` copy the user edited (e.g. while merging customizations)
+        // no longer matches the recorded official hash and must be kept.
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let target = tmp.path().join("agents/skeptic.md");
+        std::fs::write(&target, "customized").unwrap();
+        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        let new_copy = tmp.path().join("agents/skeptic.md.new");
+        std::fs::write(&new_copy, "official copy, edited by the user").unwrap();
+        let actions = uninstall_from(tmp.path()).unwrap();
+        assert!(new_copy.exists(), "edited .new copy must survive uninstall");
+        assert!(actions.iter().any(|a| a.contains("skeptic.md.new")));
+    }
+
+    #[test]
+    fn uninstall_survives_manifest_entry_without_file_name() {
+        // A hand-edited/corrupt manifest can contain entries like ".." whose
+        // join has no file name; uninstall must warn, not panic.
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let mut m = crate::manifest::Manifest::load(tmp.path()).unwrap();
+        m.files.insert("..".to_string(), "not-a-real-hash".to_string());
+        m.save(tmp.path()).unwrap();
+        uninstall_from(tmp.path()).unwrap();
     }
 
     #[test]

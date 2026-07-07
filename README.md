@@ -80,8 +80,9 @@ hook time, and every hook call is a millisecond-level native execution.
 - **Precise "changed since last test" tracking** — sequence numbers record
   the last code change vs. the last test run, and a test run clears the
   changed-file list, so when strict mode blocks, it names exactly the
-  files still unverified. Test-command detection is substring-based:
-  `cd backend && cargo test --all` counts.
+  files still unverified. Test-command detection is substring-based —
+  `cd backend && cargo test --all` counts — but quoted mentions don't:
+  `git commit -m "make cargo test pass"` is not a test run.
 - **SHA-256 manifest** — `~/.claude/harness/manifest.json` records the
   official hash of every released asset. That's how install / update /
   uninstall / doctor know whether *you* modified a file — the mechanism
@@ -149,6 +150,15 @@ or guessing writes from command strings, both at odds with the cheap,
 fail-open hook budget. The gate is a discipline nudge for a cooperative
 agent (which edits files through file tools), not a security boundary.
 
+The quoted-mention rule is deliberately conservative: a test run wrapped in
+a quoted shell script (`bash -lc 'cargo test'`,
+`docker compose exec app sh -c 'pytest'`) counts as a quoted mention and
+does not clear the gate — telling it apart from `sh -c 'echo "cargo test"'`
+would require a real shell parser. The gate errs toward blocking once
+rather than silently passing. If your project runs tests through such a
+wrapper, add the unquoted wrapper prefix to `test_commands`
+(e.g. `"docker compose exec app"`) and it matches as usual.
+
 Drop a `harness.toml` in a project root to override anything
 (`harness init` generates the template). The project config is discovered
 by walking up parent directories from the cwd — the nearest `harness.toml`
@@ -183,5 +193,5 @@ membership is set via `[review].panel`.
 - **Your customizations win**: install/update/uninstall never overwrite or
   delete files you have modified.
 
-All of this is covered by 50 unit tests plus 9 integration/E2E tests that
+All of this is covered by a unit-test suite plus integration/E2E tests that
 exercise the full install → doctor → update → uninstall lifecycle.

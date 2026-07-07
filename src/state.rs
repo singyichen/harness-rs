@@ -46,6 +46,25 @@ pub fn state_path(session_id: &str) -> PathBuf {
         .join(format!("{safe}.json"))
 }
 
+/// Delete state files older than `max_age` (best-effort, errors ignored:
+/// pruning runs inside the fail-open hook path).
+pub fn prune_older_than(dir: &Path, max_age: std::time::Duration) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let expired = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .and_then(|t| t.elapsed().map_err(|e| std::io::Error::other(e)))
+            .map(|age| age >= max_age)
+            .unwrap_or(false);
+        if expired {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 pub fn load(path: &Path) -> SessionState {
     std::fs::read_to_string(path)
         .ok()
@@ -121,6 +140,27 @@ mod tests {
         let path = tmp.path().join("s.json");
         std::fs::write(&path, "{{{ not json").unwrap();
         assert_eq!(load(&path), SessionState::default());
+    }
+
+    #[test]
+    fn prune_removes_old_state_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("old.json"), "{}").unwrap();
+        prune_older_than(tmp.path(), std::time::Duration::ZERO);
+        assert!(!tmp.path().join("old.json").exists());
+    }
+
+    #[test]
+    fn prune_keeps_recent_state_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("fresh.json"), "{}").unwrap();
+        prune_older_than(tmp.path(), std::time::Duration::from_secs(3600));
+        assert!(tmp.path().join("fresh.json").exists());
+    }
+
+    #[test]
+    fn prune_missing_dir_is_silent() {
+        prune_older_than(Path::new("/nonexistent/harness-state"), std::time::Duration::ZERO);
     }
 
     #[test]
