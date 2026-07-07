@@ -52,12 +52,13 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
             }
             // `<name>.new` official copies are harness artifacts (released
             // alongside customized files); clean removal deletes them too.
-            let new_copy = target.with_file_name(format!(
-                "{}.new",
-                target.file_name().unwrap().to_string_lossy()
-            ));
-            if std::fs::remove_file(&new_copy).is_ok() {
-                actions.push(format!("deleted {rel_path}.new"));
+            // A corrupt manifest entry ("..") may have no file name — skip it.
+            if let Some(file_name) = target.file_name() {
+                let new_copy = target
+                    .with_file_name(format!("{}.new", file_name.to_string_lossy()));
+                if std::fs::remove_file(&new_copy).is_ok() {
+                    actions.push(format!("deleted {rel_path}.new"));
+                }
             }
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
@@ -134,6 +135,18 @@ mod tests {
         uninstall_from(tmp.path()).unwrap();
         assert!(!new_copy.exists(), ".new copies are harness artifacts");
         assert!(target.exists(), "customized file still kept");
+    }
+
+    #[test]
+    fn uninstall_survives_manifest_entry_without_file_name() {
+        // A hand-edited/corrupt manifest can contain entries like ".." whose
+        // join has no file name; uninstall must warn, not panic.
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let mut m = crate::manifest::Manifest::load(tmp.path()).unwrap();
+        m.files.insert("..".to_string(), "not-a-real-hash".to_string());
+        m.save(tmp.path()).unwrap();
+        uninstall_from(tmp.path()).unwrap();
     }
 
     #[test]

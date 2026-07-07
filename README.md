@@ -150,6 +150,15 @@ or guessing writes from command strings, both at odds with the cheap,
 fail-open hook budget. The gate is a discipline nudge for a cooperative
 agent (which edits files through file tools), not a security boundary.
 
+The quoted-mention rule is deliberately conservative: a test run wrapped in
+a quoted shell script (`bash -lc 'cargo test'`,
+`docker compose exec app sh -c 'pytest'`) counts as a quoted mention and
+does not clear the gate — telling it apart from `sh -c 'echo "cargo test"'`
+would require a real shell parser. The gate errs toward blocking once
+rather than silently passing. If your project runs tests through such a
+wrapper, add the unquoted wrapper prefix to `test_commands`
+(e.g. `"docker compose exec app"`) and it matches as usual.
+
 Drop a `harness.toml` in a project root to override anything
 (`harness init` generates the template). The project config is discovered
 by walking up parent directories from the cwd — the nearest `harness.toml`

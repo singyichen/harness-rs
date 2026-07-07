@@ -191,7 +191,11 @@ fn strip_quoted(cmd: &str) -> String {
     while let Some(c) = chars.next() {
         match c {
             '\\' => {
-                chars.next(); // escaped char: not a quote delimiter
+                // Dequote: `\x` keeps the literal x (so it can't act as a
+                // quote delimiter), only the backslash itself is dropped.
+                if let Some(escaped) = chars.next() {
+                    out.push(escaped);
+                }
             }
             '\'' | '"' => {
                 while let Some(q) = chars.next() {
@@ -310,6 +314,14 @@ mod tests {
         assert!(!v.is_test_command(r#"git commit -m "fix: make cargo test pass""#));
         assert!(!v.is_test_command("echo 'cargo test'"));
         assert!(!v.is_test_command(r#"git commit -m "say \"cargo test\" now""#));
+    }
+
+    #[test]
+    fn escaped_chars_outside_quotes_keep_their_value() {
+        // Dequote semantics: `\ ` is a literal space, not a dropped char —
+        // `cargo\ test` must not collapse into "cargotest"
+        let v = Config::builtin().verify;
+        assert!(v.is_test_command(r"cargo\ test --all"));
     }
 
     #[test]

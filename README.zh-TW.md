@@ -128,6 +128,13 @@ NotebookEdit)所做的程式碼變更。任意 Bash 指令造成的檔案異動(
 fail-open 的預算。閘門是給合作型 agent(本來就用檔案工具改檔)的紀律
 提示,不是安全邊界。
 
+「引號內提及不算數」這條規則刻意保守:包在引號 shell script 裡的測試執行
+(`bash -lc 'cargo test'`、`docker compose exec app sh -c 'pytest'`)也會被
+當成引號提及而不清空閘門——要把它跟 `sh -c 'echo "cargo test"'` 區分開,
+需要一個真正的 shell parser。閘門寧可多擋一次,也不靜默放行。若你的專案
+就是透過這類 wrapper 跑測試,把未加引號的 wrapper 前綴加進
+`test_commands`(例如 `"docker compose exec app"`)即可正常比對。
+
 專案根目錄放 `harness.toml` 即可覆寫(`harness init` 產生範本)。專案設定
 會從 cwd 往上層目錄逐層尋找,最近的 `harness.toml` 優先,所以在 monorepo
 的子目錄下也能運作:
