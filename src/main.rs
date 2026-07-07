@@ -24,7 +24,11 @@ enum Command {
         project: bool,
     },
     /// Cleanly remove everything harness registered or installed
-    Uninstall,
+    Uninstall {
+        /// Remove the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Generate a harness.toml customization layer in the current project
     Init,
     /// Health check: hooks registered, versions consistent, conflicting harnesses
@@ -41,7 +45,7 @@ fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
         Command::Install { project } => commands::install::run(project),
-        Command::Uninstall => commands::uninstall::run(),
+        Command::Uninstall { project } => commands::uninstall::run(project),
         Command::Init => commands::init::run(),
         Command::Doctor => commands::doctor::run(),
         Command::Update => commands::update::run(),

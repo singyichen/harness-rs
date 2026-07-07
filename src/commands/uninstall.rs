@@ -3,17 +3,24 @@ use crate::settings;
 use std::io;
 use std::path::Path;
 
-pub fn run() -> i32 {
-    let Some(home) = dirs::home_dir() else {
-        eprintln!("error: could not determine the home directory");
-        return 1;
+pub fn run(project: bool) -> i32 {
+    let claude_dir = match crate::commands::resolve_claude_dir(project) {
+        Ok(d) => d,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            return 1;
+        }
     };
-    match uninstall_from(&home.join(".claude")) {
+    match uninstall_from(&claude_dir) {
         Ok(actions) => {
             for a in &actions {
                 println!("{a}");
             }
-            println!("harness removed (global config harness/config.toml preserved).");
+            if project {
+                println!("harness removed from this project.");
+            } else {
+                println!("harness removed (global config harness/config.toml preserved).");
+            }
             0
         }
         Err(e) => {
