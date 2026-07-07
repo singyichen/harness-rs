@@ -22,8 +22,19 @@ pub fn protocol_from(claude_dir: &Path) -> String {
         .unwrap_or_else(|_| PROTOCOL.to_string())
 }
 
+/// State files older than this are leftovers from long-dead sessions.
+const STATE_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
 pub fn run(payload: &Value) -> Option<String> {
     let config = Config::load(&payload_cwd(payload));
+    // Housekeeping: once per session, drop state files from dead sessions
+    // (nothing else ever deletes them; best-effort, fail-open).
+    if let Some(h) = dirs::home_dir() {
+        crate::state::prune_older_than(
+            &h.join(".claude").join("harness").join("state"),
+            STATE_MAX_AGE,
+        );
+    }
     let protocol = dirs::home_dir()
         .map(|h| protocol_from(&h.join(".claude")))
         .unwrap_or_else(|| PROTOCOL.to_string());

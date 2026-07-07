@@ -50,8 +50,24 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
                     ));
                 }
             }
+            // `<name>.new` official copies are harness artifacts (released
+            // alongside customized files); clean removal deletes them too.
+            let new_copy = target.with_file_name(format!(
+                "{}.new",
+                target.file_name().unwrap().to_string_lossy()
+            ));
+            if std::fs::remove_file(&new_copy).is_ok() {
+                actions.push(format!("deleted {rel_path}.new"));
+            }
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
+    }
+    // Per-session verify-gate state is a harness artifact as well.
+    let state_dir = claude_dir.join("harness").join("state");
+    match std::fs::remove_dir_all(&state_dir) {
+        Ok(()) => actions.push("deleted harness/state".to_string()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => actions.push(format!("warning: could not remove harness/state ({e})")),
     }
     Ok(actions)
 }
@@ -93,6 +109,31 @@ mod tests {
         let actions = uninstall_from(tmp.path()).unwrap();
         assert!(target.exists());
         assert!(actions.iter().any(|a| a.contains("skeptic.md")));
+    }
+
+    #[test]
+    fn uninstall_removes_session_state_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let state_dir = tmp.path().join("harness/state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::write(state_dir.join("s1.json"), "{}").unwrap();
+        uninstall_from(tmp.path()).unwrap();
+        assert!(!state_dir.exists());
+    }
+
+    #[test]
+    fn uninstall_removes_official_new_copies() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let target = tmp.path().join("agents/skeptic.md");
+        std::fs::write(&target, "customized").unwrap();
+        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        let new_copy = tmp.path().join("agents/skeptic.md.new");
+        assert!(new_copy.is_file(), "precondition: .new copy exists");
+        uninstall_from(tmp.path()).unwrap();
+        assert!(!new_copy.exists(), ".new copies are harness artifacts");
+        assert!(target.exists(), "customized file still kept");
     }
 
     #[test]
