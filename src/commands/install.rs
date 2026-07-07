@@ -4,17 +4,39 @@ use crate::settings;
 use std::io;
 use std::path::Path;
 
-pub fn run() -> i32 {
-    let Some(home) = dirs::home_dir() else {
-        eprintln!("error: could not determine the home directory");
-        return 1;
+/// Where an install lives: the user-wide `~/.claude` or a single project's
+/// `.claude/`. A project install never creates `harness/config.toml` — the
+/// engine's project config layer is `harness.toml` (see `harness init`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    Global,
+    Project,
+}
+
+pub fn run(project: bool) -> i32 {
+    let claude_dir = match crate::commands::resolve_claude_dir(project) {
+        Ok(d) => d,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            return 1;
+        }
     };
-    match install_to(&home.join(".claude")) {
+    let scope = if project { Scope::Project } else { Scope::Global };
+    match install_to(&claude_dir, scope) {
         Ok(actions) => {
             for a in &actions {
                 println!("{a}");
             }
-            println!("harness installed. Run `harness doctor` anytime for a health check.");
+            if project {
+                if dirs::home_dir().is_some_and(|h| h.join(".claude") == claude_dir) {
+                    println!("note: --project in your home directory targets ~/.claude — this is effectively a global install (without config.toml)");
+                }
+                println!("note: no config file was created — to customize this project's gates, run `harness init`");
+                println!("note: the installed files appear in git status; commit them to share with your team, or add them to .gitignore");
+                println!("harness installed for this project. Run `harness doctor --project` anytime for a health check.");
+            } else {
+                println!("harness installed. Run `harness doctor` anytime for a health check.");
+            }
             0
         }
         Err(e) => {
@@ -24,17 +46,22 @@ pub fn run() -> i32 {
     }
 }
 
-pub fn install_to(claude_dir: &Path) -> io::Result<Vec<String>> {
+pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>> {
     let mut actions = release_assets(claude_dir)?;
 
-    // Global config: written only when missing, never overwritten
-    let config_path = claude_dir.join("harness/config.toml");
-    if !config_path.exists() {
-        if let Some(dir) = config_path.parent() {
-            std::fs::create_dir_all(dir)?;
+    // Global config: written only when missing, never overwritten.
+    // A project install skips it — the engine only reads the global
+    // config.toml plus the nearest harness.toml, so a project-local
+    // config.toml would be dead weight.
+    if scope == Scope::Global {
+        let config_path = claude_dir.join("harness/config.toml");
+        if !config_path.exists() {
+            if let Some(dir) = config_path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&config_path, DEFAULT_CONFIG)?;
+            actions.push(format!("created global config {}", config_path.display()));
         }
-        std::fs::write(&config_path, DEFAULT_CONFIG)?;
-        actions.push(format!("created global config {}", config_path.display()));
     }
 
     let mut hook_actions = settings::register_hooks(&claude_dir.join("settings.json"))?;
@@ -133,7 +160,7 @@ mod tests {
     #[test]
     fn install_releases_all_assets_and_registers_hooks() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         for a in ASSETS {
             assert!(tmp.path().join(a.rel_path).is_file(), "missing {}", a.rel_path);
         }
@@ -148,10 +175,10 @@ mod tests {
     #[test]
     fn install_preserves_user_modified_asset() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, "the user's own version").unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         assert_eq!(
             std::fs::read_to_string(&target).unwrap(),
             "the user's own version"
@@ -162,10 +189,10 @@ mod tests {
     #[test]
     fn install_never_overwrites_global_config() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let cfg = tmp.path().join("harness/config.toml");
         std::fs::write(&cfg, "[gates.verify]\nmode = \"strict\"").unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         assert!(std::fs::read_to_string(&cfg).unwrap().contains("strict"));
     }
 
@@ -176,7 +203,7 @@ mod tests {
     #[test]
     fn release_assets_refreshes_unmodified_content_from_older_release() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let rel_path = "agents/skeptic.md";
         let target = tmp.path().join(rel_path);
         let old_content = "an older official release of this file";
@@ -206,7 +233,7 @@ mod tests {
     #[test]
     fn release_assets_does_not_clobber_non_utf8_content() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let rel_path = "agents/skeptic.md";
         let target = tmp.path().join(rel_path);
         let invalid_utf8: &[u8] = b"\xFF\xFE";
@@ -216,5 +243,18 @@ mod tests {
 
         assert_eq!(std::fs::read(&target).unwrap(), invalid_utf8);
         assert!(target.with_extension("md.new").is_file());
+    }
+
+    #[test]
+    fn project_install_skips_global_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path(), Scope::Project).unwrap();
+        // Assets and hooks are released as usual…
+        assert!(tmp.path().join("agents/skeptic.md").is_file());
+        assert!(tmp.path().join("harness/manifest.json").is_file());
+        let settings = std::fs::read_to_string(tmp.path().join("settings.json")).unwrap();
+        assert!(settings.contains("harness hook stop"));
+        // …but no config layer is created (the project layer is harness.toml).
+        assert!(!tmp.path().join("harness/config.toml").exists());
     }
 }

@@ -48,12 +48,12 @@ pub fn update_at(claude_dir: &Path) -> io::Result<Option<Vec<String>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::install::install_to;
+    use crate::commands::install::{install_to, Scope};
 
     #[test]
     fn update_refreshes_unmodified_and_preserves_modified() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         // Simulate a user customization of one asset
         std::fs::write(tmp.path().join("agents/skeptic.md"), "user customized").unwrap();
         let actions = update_at(tmp.path()).unwrap().expect("install exists");

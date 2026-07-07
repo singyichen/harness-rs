@@ -121,12 +121,12 @@ pub fn check(claude_dir: &Path) -> Report {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::install::install_to;
+    use crate::commands::install::{install_to, Scope};
 
     #[test]
     fn healthy_install_has_no_problems() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let r = check(tmp.path());
         assert!(r.problems.is_empty(), "{:?}", r.problems);
     }
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn user_modified_asset_is_warning_not_problem() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         std::fs::write(tmp.path().join("agents/skeptic.md"), "modified").unwrap();
         let r = check(tmp.path());
         assert!(r.problems.is_empty());
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn non_utf8_asset_is_warning_not_missing() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         std::fs::write(tmp.path().join("agents/skeptic.md"), [0xFF, 0xFE, 0x00]).unwrap();
         let r = check(tmp.path());
         assert!(r.problems.is_empty(), "{:?}", r.problems);
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn foreign_stop_hook_is_warning() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         // Manually inject a third-party Stop hook
         let p = tmp.path().join("settings.json");
         let mut v: serde_json::Value =

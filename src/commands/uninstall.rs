@@ -87,12 +87,12 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::install::install_to;
+    use crate::commands::install::{install_to, Scope};
 
     #[test]
     fn uninstall_removes_released_files_and_hooks() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         uninstall_from(tmp.path()).unwrap();
         assert!(!tmp.path().join("agents/skeptic.md").exists());
         assert!(!tmp.path().join("harness/manifest.json").exists());
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn uninstall_keeps_user_modified_files() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, "the user's own version").unwrap();
         let actions = uninstall_from(tmp.path()).unwrap();
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn uninstall_keeps_non_utf8_modified_files() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, [0xFF, 0xFE, 0x00]).unwrap();
         let actions = uninstall_from(tmp.path()).unwrap();
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn uninstall_removes_session_state_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let state_dir = tmp.path().join("harness/state");
         std::fs::create_dir_all(&state_dir).unwrap();
         std::fs::write(state_dir.join("s1.json"), "{}").unwrap();
@@ -137,10 +137,10 @@ mod tests {
     #[test]
     fn uninstall_removes_official_new_copies() {
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, "customized").unwrap();
-        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        install_to(tmp.path(), Scope::Global).unwrap(); // customization → skeptic.md.new released
         let new_copy = tmp.path().join("agents/skeptic.md.new");
         assert!(new_copy.is_file(), "precondition: .new copy exists");
         uninstall_from(tmp.path()).unwrap();
@@ -153,10 +153,10 @@ mod tests {
         // A `.new` copy the user edited (e.g. while merging customizations)
         // no longer matches the recorded official hash and must be kept.
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let target = tmp.path().join("agents/skeptic.md");
         std::fs::write(&target, "customized").unwrap();
-        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        install_to(tmp.path(), Scope::Global).unwrap(); // customization → skeptic.md.new released
         let new_copy = tmp.path().join("agents/skeptic.md.new");
         std::fs::write(&new_copy, "official copy, edited by the user").unwrap();
         let actions = uninstall_from(tmp.path()).unwrap();
@@ -169,7 +169,7 @@ mod tests {
         // A hand-edited/corrupt manifest can contain entries like ".." whose
         // join has no file name; uninstall must warn, not panic.
         let tmp = tempfile::tempdir().unwrap();
-        install_to(tmp.path()).unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
         let mut m = crate::manifest::Manifest::load(tmp.path()).unwrap();
         m.files.insert("..".to_string(), "not-a-real-hash".to_string());
         m.save(tmp.path()).unwrap();

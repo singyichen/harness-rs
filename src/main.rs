@@ -17,8 +17,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Release assets into ~/.claude/, register hooks, install agents/skills
-    Install,
+    /// Release assets into ~/.claude/ (or ./.claude with --project), register hooks
+    Install {
+        /// Install into the current project's .claude/ instead of ~/.claude/
+        #[arg(long)]
+        project: bool,
+    },
     /// Cleanly remove everything harness registered or installed
     Uninstall,
     /// Generate a harness.toml customization layer in the current project
@@ -36,7 +40,7 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Install => commands::install::run(),
+        Command::Install { project } => commands::install::run(project),
         Command::Uninstall => commands::uninstall::run(),
         Command::Init => commands::init::run(),
         Command::Doctor => commands::doctor::run(),
