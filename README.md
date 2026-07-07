@@ -117,13 +117,29 @@ modified.
 
 | Command | Purpose |
 | --- | --- |
-| `harness install` | Release assets into ~/.claude/ and register hooks |
-| `harness uninstall` | Clean removal (only harness-owned items; your customizations and global config are kept) |
+| `harness install [--project]` | Release assets into ~/.claude/ and register hooks; `--project` targets the current project's .claude/ instead |
+| `harness uninstall [--project]` | Clean removal (only harness-owned items; your customizations and global config are kept) |
 | `harness init` | Generate a harness.toml customization layer in the current project |
-| `harness doctor` | Health check: hook registration, version consistency, gate conflicts |
-| `harness update` | Re-release assets after an upgrade (your modified files are kept; official copies land in .new files) |
+| `harness doctor [--project]` | Health check: hook registration, version consistency, gate conflicts, install coexistence |
+| `harness update [--project]` | Re-release assets after an upgrade (your modified files are kept; official copies land in .new files) |
 | `harness config` | Print the merged effective config (built-in → global → project) |
 | `harness hook <event>` | Hook engine entry point (invoked by Claude Code; not for manual use) |
+
+## Project-scoped install
+
+`harness install --project` (run from the project root) installs into that
+project's `.claude/` instead of `~/.claude/` — hooks, agents, and skills
+then apply to that project only. It never creates a config file: the
+project config layer is `harness.toml` (run `harness init`). A global and
+a project install can coexist; hook commands are identical strings, so
+Claude Code de-duplicates them and each hook fires once. `doctor`,
+`update`, and `uninstall` accept the same flag to manage the project
+install. The released files show up in git status — commit them to share
+the setup with your team, or add them to `.gitignore`.
+
+The injected protocol resolves nearest-wins, like the config layers:
+`<project>/.claude/harness/protocol.md` → `~/.claude/harness/protocol.md`
+→ the embedded copy.
 
 `harness doctor` runs four classes of checks: binary-vs-installed version
 consistency, asset presence plus customization status (a file you modified
