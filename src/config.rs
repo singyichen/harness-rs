@@ -180,19 +180,25 @@ fn find_project_config(cwd: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Remove quoted segments (and backslash-escaped characters) so that a test
-/// command merely MENTIONED in a string — `git commit -m "make cargo test
-/// pass"` — cannot count as a test run. An unterminated quote strips to the
-/// end: prefer a false negative (the gate blocks once and the agent reruns
-/// the tests) over silently clearing the gate.
+/// Remove quoted segments (keeping backslash-escape sequences verbatim) so
+/// that a test command merely MENTIONED in a string — `git commit -m "make
+/// cargo test pass"` or `-m make\ cargo\ test\ pass` — cannot count as a
+/// test run. An unterminated quote strips to the end: prefer a false
+/// negative (the gate blocks once and the agent reruns the tests) over
+/// silently clearing the gate.
 fn strip_quoted(cmd: &str) -> String {
     let mut out = String::with_capacity(cmd.len());
     let mut chars = cmd.chars();
     while let Some(c) = chars.next() {
         match c {
             '\\' => {
-                // Dequote: `\x` keeps the literal x (so it can't act as a
-                // quote delimiter), only the backslash itself is dropped.
+                // Keep the escape sequence verbatim. Consuming the next
+                // char stops `\"` from acting as a quote delimiter; keeping
+                // BOTH chars stops `\ ` from reading as a plain space
+                // (`-m make\ cargo\ test\ pass` must not match "cargo
+                // test") and stops dropped chars from gluing neighbors
+                // into a match (`carg\ o` must not become "cargo").
+                out.push(c);
                 if let Some(escaped) = chars.next() {
                     out.push(escaped);
                 }
@@ -317,11 +323,19 @@ mod tests {
     }
 
     #[test]
-    fn escaped_chars_outside_quotes_keep_their_value() {
-        // Dequote semantics: `\ ` is a literal space, not a dropped char —
-        // `cargo\ test` must not collapse into "cargotest"
+    fn escaped_sequences_are_kept_verbatim() {
         let v = Config::builtin().verify;
-        assert!(v.is_test_command(r"cargo\ test --all"));
+        // Escaped whitespace must stay hidden from the matcher: a commit
+        // message with escaped spaces mentions "cargo test" but is no run
+        assert!(!v.is_test_command(r"git commit -m make\ cargo\ test\ pass"));
+        // ... and consuming the escaped char must not glue neighbors into
+        // a match (`carg\ o` must not become "cargo")
+        assert!(!v.is_test_command(r"echo carg\ o test"));
+        // `cargo\ test` is a single shell word (a program literally named
+        // "cargo test"), not a test run — the false negative is deliberate
+        assert!(!v.is_test_command(r"cargo\ test --all"));
+        // Backslashes that are path separators, not escapes, stay intact
+        assert!(v.is_test_command(r"cd C:\Users\me\proj && cargo test"));
     }
 
     #[test]

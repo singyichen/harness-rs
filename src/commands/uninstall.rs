@@ -51,13 +51,24 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
                 }
             }
             // `<name>.new` official copies are harness artifacts (released
-            // alongside customized files); clean removal deletes them too.
-            // A corrupt manifest entry ("..") may have no file name — skip it.
+            // alongside customized files); clean removal deletes them too —
+            // but only while they still hold the recorded official content,
+            // since the user may have edited one while merging. A corrupt
+            // manifest entry ("..") may have no file name — skip it.
             if let Some(file_name) = target.file_name() {
                 let new_copy = target
                     .with_file_name(format!("{}.new", file_name.to_string_lossy()));
-                if std::fs::remove_file(&new_copy).is_ok() {
-                    actions.push(format!("deleted {rel_path}.new"));
+                match std::fs::read(&new_copy) {
+                    Err(_) => {} // absent or unreadable: nothing to delete safely
+                    Ok(bytes) if sha256_hex(&bytes) == *recorded_hash => {
+                        std::fs::remove_file(&new_copy)?;
+                        actions.push(format!("deleted {rel_path}.new"));
+                    }
+                    Ok(_) => {
+                        actions.push(format!(
+                            "warning: {rel_path}.new was modified by you; keeping it"
+                        ));
+                    }
                 }
             }
         }
@@ -135,6 +146,22 @@ mod tests {
         uninstall_from(tmp.path()).unwrap();
         assert!(!new_copy.exists(), ".new copies are harness artifacts");
         assert!(target.exists(), "customized file still kept");
+    }
+
+    #[test]
+    fn uninstall_keeps_user_edited_new_copies() {
+        // A `.new` copy the user edited (e.g. while merging customizations)
+        // no longer matches the recorded official hash and must be kept.
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path()).unwrap();
+        let target = tmp.path().join("agents/skeptic.md");
+        std::fs::write(&target, "customized").unwrap();
+        install_to(tmp.path()).unwrap(); // customization → skeptic.md.new released
+        let new_copy = tmp.path().join("agents/skeptic.md.new");
+        std::fs::write(&new_copy, "official copy, edited by the user").unwrap();
+        let actions = uninstall_from(tmp.path()).unwrap();
+        assert!(new_copy.exists(), "edited .new copy must survive uninstall");
+        assert!(actions.iter().any(|a| a.contains("skeptic.md.new")));
     }
 
     #[test]
