@@ -180,8 +180,39 @@ fn find_project_config(cwd: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Remove quoted segments (and backslash-escaped characters) so that a test
+/// command merely MENTIONED in a string — `git commit -m "make cargo test
+/// pass"` — cannot count as a test run. An unterminated quote strips to the
+/// end: prefer a false negative (the gate blocks once and the agent reruns
+/// the tests) over silently clearing the gate.
+fn strip_quoted(cmd: &str) -> String {
+    let mut out = String::with_capacity(cmd.len());
+    let mut chars = cmd.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                chars.next(); // escaped char: not a quote delimiter
+            }
+            '\'' | '"' => {
+                while let Some(q) = chars.next() {
+                    match q {
+                        _ if q == c => break,
+                        '\\' if c == '"' => {
+                            chars.next(); // \" inside double quotes
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 impl VerifyGate {
     pub fn is_test_command(&self, cmd: &str) -> bool {
+        let cmd = strip_quoted(cmd);
         self.test_commands.iter().any(|t| cmd.contains(t.as_str()))
     }
 
@@ -270,6 +301,23 @@ mod tests {
         assert!(v.is_test_command("cd backend && cargo test --all"));
         assert!(v.is_test_command("pytest tests/ -v"));
         assert!(!v.is_test_command("cargo build --release"));
+    }
+
+    #[test]
+    fn quoted_test_command_mention_does_not_count() {
+        let v = Config::builtin().verify;
+        // A commit message MENTIONING a test command is not a test run
+        assert!(!v.is_test_command(r#"git commit -m "fix: make cargo test pass""#));
+        assert!(!v.is_test_command("echo 'cargo test'"));
+        assert!(!v.is_test_command(r#"git commit -m "say \"cargo test\" now""#));
+    }
+
+    #[test]
+    fn unterminated_quote_is_conservative() {
+        // Prefer a false negative (gate blocks once, agent reruns) over a
+        // false positive (gate silently cleared)
+        let v = Config::builtin().verify;
+        assert!(!v.is_test_command(r#"echo "cargo test"#));
     }
 
     #[test]
