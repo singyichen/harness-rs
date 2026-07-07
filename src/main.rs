@@ -34,7 +34,11 @@ enum Command {
     /// Health check: hooks registered, versions consistent, conflicting harnesses
     Doctor,
     /// Re-release assets after an upgrade (user-modified files are preserved)
-    Update,
+    Update {
+        /// Update the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Print the merged effective config (built-in + global + project)
     Config,
     /// Hook engine entry point, invoked by Claude Code
@@ -48,7 +52,7 @@ fn main() {
         Command::Uninstall { project } => commands::uninstall::run(project),
         Command::Init => commands::init::run(),
         Command::Doctor => commands::doctor::run(),
-        Command::Update => commands::update::run(),
+        Command::Update { project } => commands::update::run(project),
         Command::Config => commands::config_cmd::run(),
         Command::Hook { event } => hooks::run(&event),
     };

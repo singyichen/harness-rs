@@ -3,12 +3,16 @@ use crate::manifest::Manifest;
 use std::io;
 use std::path::Path;
 
-pub fn run() -> i32 {
-    let Some(home) = dirs::home_dir() else {
-        eprintln!("error: could not determine the home directory");
-        return 1;
+pub fn run(project: bool) -> i32 {
+    let claude_dir = match crate::commands::resolve_claude_dir(project) {
+        Ok(d) => d,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            return 1;
+        }
     };
-    match update_at(&home.join(".claude")) {
+    let install_hint = if project { "harness install --project" } else { "harness install" };
+    match update_at(&claude_dir) {
         Ok(Some(actions)) => {
             if actions.is_empty() {
                 println!("assets are already up to date; nothing changed.");
@@ -23,7 +27,7 @@ pub fn run() -> i32 {
             0
         }
         Ok(None) => {
-            eprintln!("error: harness is not installed — run `harness install` first");
+            eprintln!("error: harness is not installed — run `{install_hint}` first");
             1
         }
         Err(e) => {
