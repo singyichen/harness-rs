@@ -10,14 +10,25 @@ pub struct Report {
     pub oks: Vec<String>,
 }
 
-pub fn run() -> i32 {
-    let Some(home) = dirs::home_dir() else {
-        eprintln!("error: could not determine the home directory");
-        return 1;
+pub fn run(project: bool) -> i32 {
+    let claude_dir = match crate::commands::resolve_claude_dir(project) {
+        Ok(d) => d,
+        Err(msg) => {
+            eprintln!("error: {msg}");
+            return 1;
+        }
     };
-    let r = check(&home.join(".claude"));
+    let r = check(&claude_dir);
     for ok in &r.oks {
         println!("ok: {ok}");
+    }
+    let other = if project {
+        dirs::home_dir().map(|h| h.join(".claude"))
+    } else {
+        std::env::current_dir().ok().map(|d| d.join(".claude"))
+    };
+    if let Some(note) = other.and_then(|o| coexistence_note(&o, project)) {
+        println!("note: {note}");
     }
     for w in &r.warnings {
         println!("warning: {w}");
@@ -118,10 +129,46 @@ pub fn check(claude_dir: &Path) -> Report {
     r
 }
 
+/// A hint (ok-level, never a warning) when the "other" install layer is
+/// also present. `other_claude_dir` is the layer NOT being checked:
+/// the project's `.claude` when running globally, `~/.claude` when
+/// running with --project.
+pub fn coexistence_note(other_claude_dir: &Path, project_mode: bool) -> Option<String> {
+    Manifest::load(other_claude_dir)?;
+    Some(if project_mode {
+        "a global install is also present; identical hook commands are de-duplicated by Claude Code, so each hook fires once".to_string()
+    } else {
+        "this project also has a project-scoped install — run `harness doctor --project` to check it".to_string()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::install::{install_to, Scope};
+
+    #[test]
+    fn coexistence_note_absent_when_other_layer_not_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(coexistence_note(tmp.path(), true).is_none());
+        assert!(coexistence_note(tmp.path(), false).is_none());
+    }
+
+    #[test]
+    fn coexistence_note_from_global_view_points_at_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path(), Scope::Project).unwrap();
+        let note = coexistence_note(tmp.path(), false).unwrap();
+        assert!(note.contains("doctor --project"), "{note}");
+    }
+
+    #[test]
+    fn coexistence_note_from_project_view_mentions_dedup() {
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
+        let note = coexistence_note(tmp.path(), true).unwrap();
+        assert!(note.contains("de-duplicated"), "{note}");
+    }
 
     #[test]
     fn healthy_install_has_no_problems() {

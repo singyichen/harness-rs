@@ -32,7 +32,11 @@ enum Command {
     /// Generate a harness.toml customization layer in the current project
     Init,
     /// Health check: hooks registered, versions consistent, conflicting harnesses
-    Doctor,
+    Doctor {
+        /// Check the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Re-release assets after an upgrade (user-modified files are preserved)
     Update {
         /// Update the current project's install instead of the global one
@@ -51,7 +55,7 @@ fn main() {
         Command::Install { project } => commands::install::run(project),
         Command::Uninstall { project } => commands::uninstall::run(project),
         Command::Init => commands::init::run(),
-        Command::Doctor => commands::doctor::run(),
+        Command::Doctor { project } => commands::doctor::run(project),
         Command::Update { project } => commands::update::run(project),
         Command::Config => commands::config_cmd::run(),
         Command::Hook { event } => hooks::run(&event),
