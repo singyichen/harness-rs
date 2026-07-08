@@ -55,10 +55,14 @@ hook time, and every hook call is a millisecond-level native execution.
 
 ## How it works
 
-- **OODA loop** — before answering, Claude gathers evidence (search/read the
-  actual files, never guess from training memory), states its assumptions out
-  loud, turns the task into something verifiable ("make it work" isn't good
-  enough), then makes small changes and checks each one.
+- **OODA loop** — before answering, Claude runs one OODA pass:
+
+  | Step | What it requires |
+  | --- | --- |
+  | Observe | Gather evidence with tools first (in parallel where possible) — never guess from training memory |
+  | Orient | State assumptions explicitly; list competing readings for you to pick; stop and ask when genuinely unsure |
+  | Decide | Turn the task into a verifiable goal (fail-then-pass) — don't stop at "make it work" |
+  | Act | Small change → verify → iterate; every line traces back to a requirement |
 - **Multi-party adversarial review** — harness's signature move. Before
   trusting a big conclusion (an architecture decision, a root-cause diagnosis,
   anything that could affect production), Claude dispatches independent
