@@ -1,8 +1,19 @@
-# harness — Claude Code 工程紀律引擎
+<div align="center">
 
-> 一個 Rust 單一 binary,讓 Claude Code 像個有紀律的工程師一樣工作——動手前先查證、把假設講清楚、重大結論先找人挑戰過再採信、用真正的測試證明改動有效。
+# harness
 
-[English README](README.md)
+**Claude Code 工程紀律引擎**
+
+一個 Rust 單一 binary,讓 Claude Code 像個有紀律的工程師一樣工作——動手前先查證、把假設講清楚、重大結論先找人挑戰過再採信、用真正的測試證明改動有效。
+
+![Claude Code](https://img.shields.io/badge/Claude%20Code-protocol%20%2B%20hooks-8A2BE2.svg)
+![Rust](https://img.shields.io/badge/Rust-single%20binary-orange.svg)
+![runtime deps](https://img.shields.io/badge/runtime%20deps-zero-blue.svg)
+![review](https://img.shields.io/badge/review-adversarial%20panel-red.svg)
+
+**[English](README.md)** · **繁體中文**
+
+</div>
 
 ![harness 架構圖](docs/architecture.zh-TW.png)
 
@@ -24,9 +35,9 @@ Claude 新招式,而是確保 Claude **每一次都照著一套有紀律的流�
 鎖在單一模型裡,harness 把它提煉成一套可重複使用的協議,不管當下是哪個 Claude
 模型在主導,每個 session 都維持同一套紀律。
 
-誠實說在前面:hooks 和 skill 只能移植「程序」本身(先蒐證、講假設、交叉質疑
+誠實說在前面:hooks 和 skill 只能移植「流程」本身(先蒐證、講假設、交叉質疑
 結論、要求驗證證據),沒辦法移植一個模型天生的判斷力。但實務上,「表現得好」
-跟「表現得隨便」之間的落差,大多來自程序被跳過,而不是判斷力不足。這正是
+跟「表現得隨便」之間的落差,大多來自流程被跳過,而不是判斷力不足。這正是
 harness 想補上的落差。
 
 ## 為什麼是單一 binary
@@ -38,9 +49,14 @@ harness 想補上的落差。
 
 ## 運作機制
 
-- **OODA 迴圈**——回答前,Claude 先蒐集證據(實際搜尋/讀取檔案,不靠訓練記憶
-  亂猜),把假設講出來,把任務轉成一個可驗證的目標(「讓它能動」這種說法不夠),
-  然後小步修改、每一步都驗證。
+- **OODA 迴圈**——回答前,Claude 強制走一輪 OODA:
+
+  | 步驟 | 要求 |
+  | --- | --- |
+  | Observe | 先用工具蒐集證據(可並行),不靠訓練記憶亂猜 |
+  | Orient | 明確陳述假設;多種解讀要列出讓你選,真的不確定就停下來問 |
+  | Decide | 把任務轉成可驗證目標(fail-then-pass),別停在「讓它能動」 |
+  | Act | 小改動 → 驗證 → 迭代,每一行改動都能對回需求 |
 - **多方抗辯(adversarial review)**——harness 最具特色的機制。在採信一個重大
   結論之前(架構決策、根因判定、任何可能影響上線環境的結論),Claude 會**同時**
   派出多個獨立的「反方」子代理,各自負責不同角度:**skeptic** 專找邏輯漏洞、
@@ -58,18 +74,11 @@ harness 想補上的落差。
 
 ## 開箱即用
 
-- **多語言預設值**——內建約 25 組測試指令(`cargo test`、`pytest`、
-  `npm test`、`go test`、`mvn test`、`mix test`、`rspec`、`dotnet test`……)
-  與約 21 組跨語言的程式碼檔案 globs,大多數技術棧零設定就能用驗證閘門。
-  `docs/`、`*.md`、`*.txt` 預設豁免——改文件永遠不會觸發閘門。
-- **精準的「上次測試後改了什麼」追蹤**——用序號記錄最後一次程式碼修改與
-  最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,
-  能明確列出還沒驗證的檔案。測試指令採子字串比對:
-  `cd backend && cargo test --all` 也算數;但引號內的提及不算——
-  `git commit -m "make cargo test pass"` 不會被當成測試執行。
-- **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出資產
-  的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是
-  **你**改過的——也是「你的客製優先」背後的機制。
+| 功能 | 內容 |
+| --- | --- |
+| **多語言預設值** | 內建約 25 組測試指令(`cargo test`、`pytest`、`npm test`、`go test`、`mvn test`、`mix test`、`rspec`、`dotnet test`……)與約 21 組跨語言的程式碼檔案 globs,大多數技術棧零設定就能用驗證閘門。`docs/`、`*.md`、`*.txt` 預設豁免——改文件永遠不會觸發閘門。 |
+| **精準的「上次測試後改了什麼」追蹤** | 用序號記錄最後一次程式碼修改與最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,能明確列出還沒驗證的檔案。測試指令採子字串比對:`cd backend && cargo test --all` 也算數;但引號內的提及不算——`git commit -m "make cargo test pass"` 不會被當成測試執行。 |
+| **SHA-256 manifest** | `~/.claude/harness/manifest.json` 記錄每個釋出 asset 的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是**你**改過的——也是「你的客製優先」背後的機制。 |
 
 ## 裡面有什麼
 
@@ -88,7 +97,7 @@ harness 想補上的落差。
 
 ```bash
 cargo install --path .
-harness install    # 釋出資產 + 註冊 hooks + 安裝 agents/skills
+harness install    # 釋出 assets + 註冊 hooks + 安裝 agents/skills
 harness doctor     # 體檢
 ```
 
@@ -99,30 +108,30 @@ harness doctor     # 體檢
 
 | 指令 | 作用 |
 | --- | --- |
-| `harness install [--project]` | 釋出資產到 ~/.claude/、註冊 hooks;`--project` 改為在當前專案的 .claude/ 安裝 |
+| `harness install [--project]` | 釋出 assets 到 ~/.claude/、註冊 hooks;`--project` 改為在當前專案的 .claude/ 安裝 |
 | `harness uninstall [--project]` | 乾淨移除(只刪自己的東西,保留你的客製與全域設定) |
 | `harness init` | 在當前專案產生 harness.toml 客製層 |
 | `harness doctor [--project]` | 體檢:hooks 註冊、版本一致、閘門衝突、安裝共存狀態 |
-| `harness update [--project]` | 升版後重釋資產(你改過的檔案保留,官方新版存 .new) |
+| `harness update [--project]` | 升版後重釋 assets(你改過的檔案保留,官方新版存 .new) |
 | `harness config` | 顯示合併後設定(內建 → 全域 → 專案) |
 | `harness hook <event>` | hook 引擎入口(Claude Code 呼叫,不需手動使用) |
 
 ## 專案範圍安裝
 
-在專案根目錄執行 `harness install --project`，會把 harness 裝進該專案的
+在專案根目錄執行 `harness install --project`,會把 harness 裝進該專案的
 `.claude/` 而非 `~/.claude/`——hooks、agents、skills 只對這個專案生效。
-專案安裝不會建立任何設定檔：專案層的設定就是 `harness.toml`（執行
-`harness init` 生成）。全域與專案安裝可以共存；兩邊註冊的 hook 指令
-字串完全相同，Claude Code 會自動去重，每個 hook 只觸發一次。`doctor`、
+專案安裝不會建立任何設定檔:專案層的設定就是 `harness.toml`(執行
+`harness init` 生成)。全域與專案安裝可以共存;兩邊註冊的 hook 指令
+字串完全相同,Claude Code 會自動去重,每個 hook 只觸發一次。`doctor`、
 `update`、`uninstall` 也接受同樣的 flag 來管理專案安裝。釋出的檔案會
-出現在 git status——commit 進 repo 可與團隊共享這套設定，不想共享就
+出現在 git status——commit 進 repo 可與團隊共享這套設定,不想共享就
 加進 `.gitignore`。
 
-注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找：
-`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd）→
+注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找:
+`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd)→
 `~/.claude/harness/protocol.md` → 內嵌版。
 
-`harness doctor` 執行四類檢查:binary 與已安裝資產的版本一致性、資產是否
+`harness doctor` 執行四類檢查:binary 與已安裝 assets 的版本一致性、assets 是否
 齊全與客製狀態(你改過的檔案算警告,不算錯誤)、四個 hooks 是否全數註冊、
 以及偵測外來的 Stop hook(警告它可能與驗證閘門同時擋下)。每個查出的問題
 都附上可直接執行的修復提示(通常是「run `harness install`」或
@@ -132,9 +141,11 @@ harness doctor     # 體檢
 
 改了程式碼卻沒在其後跑測試?回合結束時依模式處理:
 
-- `strict`:擋下,要求補測試(或向使用者說明原因後,第二次結束放行)
-- `advisory`(預設):附警告放行
-- `off`:不檢查
+| 模式 | 行為 |
+| --- | --- |
+| `strict` | 擋下,要求補測試(或向使用者說明原因後,第二次結束放行) |
+| `advisory`(預設) | 附警告放行 |
+| `off` | 不檢查 |
 
 適用範圍:閘門追蹤的是 agent 透過檔案工具(Edit / Write / MultiEdit /
 NotebookEdit)所做的程式碼變更。任意 Bash 指令造成的檔案異動(`sed -i`、
@@ -162,21 +173,25 @@ test_commands = ["cargo test"]
 
 ## 對抗審查
 
-五個 agent 鏡頭(skeptic / red-team / simplifier / evidence-auditor /
-user-advocate)+ `adversarial-review` skill,重大結論過半存活才採信。
-小組成員由 `[review].panel` 設定。
+採信重大結論前,`adversarial-review` skill 會同時派出多個獨立鏡頭,過半
+「存活」才採信。預設 panel 是三個,另外兩個也一併安裝、可透過
+`[review].panel` 加入。
+
+| 角色 | 審查角度 | 預設 panel |
+| --- | --- | --- |
+| `skeptic` | 邏輯漏洞、未驗證的推論 | ✓ |
+| `red-team` | 安全風險、失效模式 | ✓ |
+| `simplifier` | 過度工程、不必要的複雜度 | ✓ |
+| `evidence-auditor` | 每個主張是否有證據(file:line、測試輸出) | — |
+| `user-advocate` | 有沒有解決使用者原本的需求、需求是否漂移 | — |
 
 ## 設計原則
 
-- **Fail-open**:hook 引擎任何內部錯誤一律放行,絕不弄壞你的 session。
-  具體來說:panic 會被攔截並靜音(hook 永遠 exit 0)、無效的設定值直接忽略、
-  壞掉的 TOML 層直接跳過、狀態寫入失敗也保持沉默;`stop_hook_active` 旗標
-  保證驗證閘門絕不會陷入無限擋下的迴圈。
-- **settings.json 安全**:時間戳備份、只增不覆、原子寫入、保留未知欄位。
-  沒有變更就不備份、不寫入——重複執行是冪等的,不會堆一堆備份檔。靠標記
-  (marker)辨識,只會動到自己的 hook 項目;settings.json 不存在時會自動
-  建立。
-- **你的客製優先**:install/update/uninstall 都不會覆蓋或刪除你改過的檔案。
+| 原則 | 保證 |
+| --- | --- |
+| **Fail-open** | hook 引擎任何內部錯誤一律放行,絕不弄壞你的 session。panic 會被攔截並靜音(hook 永遠 exit 0)、無效的設定值直接忽略、壞掉的 TOML 層直接跳過、狀態寫入失敗也保持沉默;`stop_hook_active` 旗標保證驗證閘門絕不會陷入無限擋下的迴圈。 |
+| **settings.json 安全** | 時間戳備份、只增不覆、原子寫入、保留未知欄位。沒有變更就不備份、不寫入——重複執行是冪等的,不會堆一堆備份檔。靠標記(marker)辨識,只會動到自己的 hook 項目;settings.json 不存在時會自動建立。 |
+| **你的客製優先** | install/update/uninstall 都不會覆蓋或刪除你改過的檔案。 |
 
 以上全部由單元測試套件加整合/E2E 測試把關,涵蓋完整的
 install → doctor → update → uninstall 生命週期。

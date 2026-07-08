@@ -1,23 +1,23 @@
-# Project-Scoped Install（--project flag）Implementation Plan
+# Project-Scoped Install(--project flag)Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 讓 `install` / `uninstall` / `doctor` / `update` 支援 `--project` flag，把 harness 裝進（或管理）`<cwd>/.claude/` 而非 `~/.claude/`，全域安裝行為不變、兩者可共存。
+**Goal:** 讓 `install` / `uninstall` / `doctor` / `update` 支援 `--project` flag,把 harness 裝進(或管理)`<cwd>/.claude/` 而非 `~/.claude/`,全域安裝行為不變、兩者可共存。
 
-**Architecture:** 四個生命週期指令的核心函式（`install_to` / `uninstall_from` / `check` / `update_at`）已參數化接受 `claude_dir: &Path`，本擴充只在 CLI 層新增路徑解析（`resolve_claude_dir`）與少量行為分支（專案安裝不建 config、doctor 共存提示、protocol 三層讀取）。
+**Architecture:** 四個生命週期指令的核心函式(`install_to` / `uninstall_from` / `check` / `update_at`)已參數化接受 `claude_dir: &Path`,本擴充只在 CLI 層新增路徑解析(`resolve_claude_dir`)與少量行為分支(專案安裝不建 config、doctor 共存提示、protocol 三層讀取)。
 
-**Tech Stack:** Rust、clap（derive）、tempfile / assert_cmd / predicates（測試）。
+**Tech Stack:** Rust、clap(derive)、tempfile / assert_cmd / predicates(測試)。
 
 **Spec:** `docs/superpowers/specs/2026-07-07-project-scoped-install-design.md`
 
 ## Global Constraints
 
-- 執行任何 cargo 指令前先 `export PATH="$HOME/.cargo/bin:$PATH"`（此機器 cargo 不在預設 PATH）。
-- 全域（無 flag）行為必須逐字元不變：既有訊息字串、檔案佈局、退出碼都不得改動。
-- 全域與專案註冊的 hook 指令字串必須逐字元相同（皆來自 `settings::HOOK_EVENTS` 常數）——Claude Code 靠這個去重。
+- 執行任何 cargo 指令前先 `export PATH="$HOME/.cargo/bin:$PATH"`(此機器 cargo 不在預設 PATH)。
+- 全域(無 flag)行為必須逐字元不變:既有訊息字串、檔案佈局、退出碼都不得改動。
+- 全域與專案註冊的 hook 指令字串必須逐字元相同(皆來自 `settings::HOOK_EVENTS` 常數)——Claude Code 靠這個去重。
 - 專案安裝**不建立** `harness/config.toml`。
 - `init` / `config` / `hook` 三個子指令不改動。
-- 每個 task 內：先寫失敗測試 → 確認失敗 → 最小實作 → 確認通過 → commit。
+- 每個 task 內:先寫失敗測試 → 確認失敗 → 最小實作 → 確認通過 → commit。
 - commit 訊息結尾加 `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`。
 
 ---
@@ -25,10 +25,10 @@
 ### Task 1: `resolve_claude_dir` 路徑解析 helper
 
 **Files:**
-- Modify: `src/commands/mod.rs`（目前只有 6 行 `pub mod` 宣告）
+- Modify: `src/commands/mod.rs`(目前只有 6 行 `pub mod` 宣告)
 
 **Interfaces:**
-- Produces: `pub fn resolve_claude_dir(project: bool) -> Result<std::path::PathBuf, String>` —— `false` → `~/.claude`；`true` → `<cwd>/.claude`。後續 Task 2–5 的 `run(project)` 都呼叫它。
+- Produces: `pub fn resolve_claude_dir(project: bool) -> Result<std::path::PathBuf, String>` —— `false` → `~/.claude`;`true` → `<cwd>/.claude`。後續 Task 2–5 的 `run(project)` 都呼叫它。
 
 - [ ] **Step 1: 在 `src/commands/mod.rs` 底部加入失敗測試**
 
@@ -51,10 +51,10 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: 確認測試失敗（編譯錯誤：函式不存在）**
+- [ ] **Step 2: 確認測試失敗(編譯錯誤:函式不存在)**
 
 Run: `cargo test --lib commands::tests`
-Expected: 編譯失敗，`cannot find function resolve_claude_dir`
+Expected: 編譯失敗,`cannot find function resolve_claude_dir`
 
 - [ ] **Step 3: 在 `pub mod` 宣告之後加入實作**
 
@@ -90,16 +90,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: `install --project`（Scope enum、跳過 config、CLI 佈線與提示）
+### Task 2: `install --project`(Scope enum、跳過 config、CLI 佈線與提示)
 
 **Files:**
 - Modify: `src/commands/install.rs`
-- Modify: `src/main.rs:20-21`（Install variant）、`src/main.rs:39`（match arm）
-- Modify: 其他呼叫 `install_to` 的測試（`src/commands/uninstall.rs`、`src/commands/doctor.rs`、`src/commands/update.rs` 的 `#[cfg(test)]`）
+- Modify: `src/main.rs:20-21`(Install variant)、`src/main.rs:39`(match arm)
+- Modify: 其他呼叫 `install_to` 的測試(`src/commands/uninstall.rs`、`src/commands/doctor.rs`、`src/commands/update.rs` 的 `#[cfg(test)]`)
 
 **Interfaces:**
-- Consumes: `resolve_claude_dir(project)`（Task 1）
-- Produces: `pub enum Scope { Global, Project }`、`pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>>`、`pub fn run(project: bool) -> i32`。Task 3–5 與 7 依賴這些簽名；所有既有測試呼叫改為 `install_to(dir, Scope::Global)`。
+- Consumes: `resolve_claude_dir(project)`(Task 1)
+- Produces: `pub enum Scope { Global, Project }`、`pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>>`、`pub fn run(project: bool) -> i32`。Task 3–5 與 7 依賴這些簽名;所有既有測試呼叫改為 `install_to(dir, Scope::Global)`。
 
 - [ ] **Step 1: 在 `src/commands/install.rs` 的 tests 模組加入失敗測試**
 
@@ -118,14 +118,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     }
 ```
 
-- [ ] **Step 2: 確認失敗（`Scope` 不存在、`install_to` 參數數量錯誤）**
+- [ ] **Step 2: 確認失敗(`Scope` 不存在、`install_to` 參數數量錯誤)**
 
 Run: `cargo test --lib commands::install`
 Expected: 編譯失敗
 
 - [ ] **Step 3: 修改 `src/commands/install.rs`**
 
-在檔案頂部（`use` 之後）加入：
+在檔案頂部(`use` 之後)加入:
 
 ```rust
 /// Where an install lives: the user-wide `~/.claude` or a single project's
@@ -138,7 +138,7 @@ pub enum Scope {
 }
 ```
 
-`run` 與 `install_to` 改為：
+`run` 與 `install_to` 改為:
 
 ```rust
 pub fn run(project: bool) -> i32 {
@@ -200,7 +200,7 @@ pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>> {
 
 - [ ] **Step 4: 更新所有既有呼叫點**
 
-`src/main.rs`：
+`src/main.rs`:
 
 ```rust
     /// Release assets into ~/.claude/ (or ./.claude with --project), register hooks
@@ -211,14 +211,14 @@ pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>> {
     },
 ```
 
-match arm：`Command::Install { project } => commands::install::run(project),`
+match arm:`Command::Install { project } => commands::install::run(project),`
 
-`install.rs` 自己的 4 個既有測試、`uninstall.rs` tests（8 處）、`doctor.rs` tests（5 處）、`update.rs` tests（1 處）中的 `install_to(tmp.path())` 全部改為 `install_to(tmp.path(), Scope::Global)`，並在各檔 tests 模組的 `use` 加上 `Scope`（如 `use crate::commands::install::{install_to, Scope};`）。
+`install.rs` 自己的 4 個既有測試、`uninstall.rs` tests(8 處)、`doctor.rs` tests(5 處)、`update.rs` tests(1 處)中的 `install_to(tmp.path())` 全部改為 `install_to(tmp.path(), Scope::Global)`,並在各檔 tests 模組的 `use` 加上 `Scope`(如 `use crate::commands::install::{install_to, Scope};`)。
 
 - [ ] **Step 5: 全套測試通過**
 
 Run: `cargo test`
-Expected: 全部通過（含新測試 `project_install_skips_global_config`）
+Expected: 全部通過(含新測試 `project_install_skips_global_config`)
 
 - [ ] **Step 6: Commit**
 
@@ -234,14 +234,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 3: `uninstall --project`
 
 **Files:**
-- Modify: `src/commands/uninstall.rs:6-24`（`run`）
-- Modify: `src/main.rs`（Uninstall variant + match arm）
+- Modify: `src/commands/uninstall.rs:6-24`(`run`)
+- Modify: `src/main.rs`(Uninstall variant + match arm)
 
 **Interfaces:**
 - Consumes: `resolve_claude_dir(project)`
-- Produces: `pub fn run(project: bool) -> i32`。`uninstall_from` 簽名不變（已通用）。
+- Produces: `pub fn run(project: bool) -> i32`。`uninstall_from` 簽名不變(已通用)。
 
-- [ ] **Step 1: 修改 `run`（此 task 為 CLI 佈線，核心邏輯已有單元測試覆蓋；行為驗證在 Task 7 的 E2E）**
+- [ ] **Step 1: 修改 `run`(此 task 為 CLI 佈線,核心邏輯已有單元測試覆蓋;行為驗證在 Task 7 的 E2E)**
 
 ```rust
 pub fn run(project: bool) -> i32 {
@@ -272,7 +272,7 @@ pub fn run(project: bool) -> i32 {
 }
 ```
 
-`src/main.rs`：
+`src/main.rs`:
 
 ```rust
     /// Cleanly remove everything harness registered or installed
@@ -283,7 +283,7 @@ pub fn run(project: bool) -> i32 {
     },
 ```
 
-match arm：`Command::Uninstall { project } => commands::uninstall::run(project),`
+match arm:`Command::Uninstall { project } => commands::uninstall::run(project),`
 
 - [ ] **Step 2: 編譯與既有測試通過**
 
@@ -304,8 +304,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 4: `update --project`
 
 **Files:**
-- Modify: `src/commands/update.rs:6-34`（`run`）
-- Modify: `src/main.rs`（Update variant + match arm）
+- Modify: `src/commands/update.rs:6-34`(`run`)
+- Modify: `src/main.rs`(Update variant + match arm)
 
 **Interfaces:**
 - Consumes: `resolve_claude_dir(project)`
@@ -349,7 +349,7 @@ pub fn run(project: bool) -> i32 {
 }
 ```
 
-`src/main.rs`：
+`src/main.rs`:
 
 ```rust
     /// Re-release assets after an upgrade (user-modified files are preserved)
@@ -360,7 +360,7 @@ pub fn run(project: bool) -> i32 {
     },
 ```
 
-match arm：`Command::Update { project } => commands::update::run(project),`
+match arm:`Command::Update { project } => commands::update::run(project),`
 
 - [ ] **Step 2: 編譯與既有測試通過**
 
@@ -382,11 +382,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `src/commands/doctor.rs`
-- Modify: `src/main.rs`（Doctor variant + match arm）
+- Modify: `src/main.rs`(Doctor variant + match arm)
 
 **Interfaces:**
 - Consumes: `resolve_claude_dir(project)`、`Manifest::load`
-- Produces: `pub fn coexistence_note(other_claude_dir: &Path, project_mode: bool) -> Option<String>`、`pub fn run(project: bool) -> i32`。`check` 簽名不變（settings.json 與 foreign Stop hook 檢查已相對於傳入的 `claude_dir`，`--project` 模式自然檢查專案的 settings.json）。
+- Produces: `pub fn coexistence_note(other_claude_dir: &Path, project_mode: bool) -> Option<String>`、`pub fn run(project: bool) -> i32`。`check` 簽名不變(settings.json 與 foreign Stop hook 檢查已相對於傳入的 `claude_dir`,`--project` 模式自然檢查專案的 settings.json)。
 
 - [ ] **Step 1: 在 `src/commands/doctor.rs` tests 加入失敗測試**
 
@@ -415,16 +415,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     }
 ```
 
-（tests 模組的 `use` 改為 `use crate::commands::install::{install_to, Scope};`）
+(tests 模組的 `use` 改為 `use crate::commands::install::{install_to, Scope};`)
 
 - [ ] **Step 2: 確認失敗**
 
 Run: `cargo test --lib commands::doctor`
-Expected: 編譯失敗，`cannot find function coexistence_note`
+Expected: 編譯失敗,`cannot find function coexistence_note`
 
 - [ ] **Step 3: 實作**
 
-在 `check` 之後加入：
+在 `check` 之後加入:
 
 ```rust
 /// A hint (ok-level, never a warning) when the "other" install layer is
@@ -441,7 +441,7 @@ pub fn coexistence_note(other_claude_dir: &Path, project_mode: bool) -> Option<S
 }
 ```
 
-`run` 改為：
+`run` 改為:
 
 ```rust
 pub fn run(project: bool) -> i32 {
@@ -479,9 +479,9 @@ pub fn run(project: bool) -> i32 {
 }
 ```
 
-注意：`Manifest::load(other_claude_dir)?` 中 `?` 作用於 `Option`，manifest 不存在即回傳 `None`。全域模式下 `other` 是 `<cwd>/.claude`——若 cwd 恰好是家目錄，`other == claude_dir`，note 會指向同一份安裝；可接受（提示無害且此情境罕見）。
+注意:`Manifest::load(other_claude_dir)?` 中 `?` 作用於 `Option`,manifest 不存在即回傳 `None`。全域模式下 `other` 是 `<cwd>/.claude`——若 cwd 恰好是家目錄,`other == claude_dir`,note 會指向同一份安裝;可接受(提示無害且此情境罕見)。
 
-`src/main.rs`：
+`src/main.rs`:
 
 ```rust
     /// Health check: hooks registered, versions consistent, conflicting harnesses
@@ -492,7 +492,7 @@ pub fn run(project: bool) -> i32 {
     },
 ```
 
-match arm：`Command::Doctor { project } => commands::doctor::run(project),`
+match arm:`Command::Doctor { project } => commands::doctor::run(project),`
 
 - [ ] **Step 4: 全套測試通過**
 
@@ -510,15 +510,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: protocol.md 三層讀取（專案 → 全域 → 內嵌）
+### Task 6: protocol.md 三層讀取(專案 → 全域 → 內嵌)
 
 **Files:**
 - Modify: `src/hooks/session_start.rs`
 
 **Interfaces:**
-- Produces: `pub fn protocol_layered(project_claude_dir: Option<&Path>, global_claude_dir: Option<&Path>) -> String`（取代 `protocol_from`；repo 內無其他呼叫者）。
+- Produces: `pub fn protocol_layered(project_claude_dir: Option<&Path>, global_claude_dir: Option<&Path>) -> String`(取代 `protocol_from`;repo 內無其他呼叫者)。
 
-- [ ] **Step 1: 改寫 tests 模組為分層語意（先寫、先跑、先看它失敗）**
+- [ ] **Step 1: 改寫 tests 模組為分層語意(先寫、先跑、先看它失敗)**
 
 ```rust
 #[cfg(test)]
@@ -585,7 +585,7 @@ mod tests {
 - [ ] **Step 2: 確認失敗**
 
 Run: `cargo test --lib hooks::session_start`
-Expected: 編譯失敗，`cannot find function protocol_layered`
+Expected: 編譯失敗,`cannot find function protocol_layered`
 
 - [ ] **Step 3: 以 `protocol_layered` 取代 `protocol_from` 並更新 `run`**
 
@@ -618,19 +618,19 @@ fn read_protocol(claude_dir: &Path) -> Option<String> {
         .unwrap_or_else(|| PROTOCOL.to_string());
 ```
 
-改為（`payload_cwd` 已在 `run` 開頭為 config 取得 cwd，提到共用變數）：
+改為(`payload_cwd` 已在 `run` 開頭為 config 取得 cwd,提到共用變數):
 
 ```rust
     let cwd = payload_cwd(payload);
     let config = Config::load(&cwd);
-    // …（state prune 不變）…
+    // …(state prune 不變)…
     let global = dirs::home_dir().map(|h| h.join(".claude"));
     let protocol = protocol_layered(Some(&cwd.join(".claude")), global.as_deref());
 ```
 
-刪除 `protocol_from`（唯一外部呼叫者就是 `run`；舊測試已在 Step 1 改寫）。
+刪除 `protocol_from`(唯一外部呼叫者就是 `run`;舊測試已在 Step 1 改寫)。
 
-- [ ] **Step 4: 全套測試通過（含 `tests/hooks.rs` 的 session-start E2E 不受影響）**
+- [ ] **Step 4: 全套測試通過(含 `tests/hooks.rs` 的 session-start E2E 不受影響)**
 
 Run: `cargo test`
 Expected: 全部通過
@@ -649,7 +649,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 7: E2E — 專案生命週期、共存、hook 字串不變量
 
 **Files:**
-- Modify: `tests/e2e.rs`（沿用既有 `harness(home)` helper：`Command::cargo_bin("harness")` + `env("HOME", …)`；專案模式再加 `.current_dir(proj)`）
+- Modify: `tests/e2e.rs`(沿用既有 `harness(home)` helper:`Command::cargo_bin("harness")` + `env("HOME", …)`;專案模式再加 `.current_dir(proj)`)
 
 **Interfaces:**
 - Consumes: Task 2–5 的 CLI 行為與訊息字串。
@@ -739,12 +739,12 @@ fn project_install_in_home_directory_prints_overlap_note() {
 }
 ```
 
-需要 `tests/e2e.rs` 之 dev-dependency `serde_json`——`Cargo.toml` 的 `[dev-dependencies]` 若尚無 `serde_json` 則加入（主依賴已有，直接 `serde_json = "1"`）。
+需要 `tests/e2e.rs` 之 dev-dependency `serde_json`——`Cargo.toml` 的 `[dev-dependencies]` 若尚無 `serde_json` 則加入(主依賴已有,直接 `serde_json = "1"`)。
 
 - [ ] **Step 2: 執行 E2E 確認通過**
 
 Run: `cargo test --test e2e`
-Expected: 全部通過（若失敗，回頭修 Task 2–5 的實作，不改測試斷言）
+Expected: 全部通過(若失敗,回頭修 Task 2–5 的實作,不改測試斷言)
 
 - [ ] **Step 3: Commit**
 
@@ -757,15 +757,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 8: README 文件更新（英文＋繁中）
+### Task 8: README 文件更新(英文＋繁中)
 
 **Files:**
-- Modify: `README.md`（Commands 表格、Quick start 之後）
-- Modify: `README.zh-TW.md`（對應段落）
+- Modify: `README.md`(Commands 表格、Quick start 之後)
+- Modify: `README.zh-TW.md`(對應段落)
 
 - [ ] **Step 1: `README.md` Commands 表格更新兩列並補一段**
 
-表格中 install / uninstall / doctor / update 四列的 Purpose 各補 `--project` 說明，例如：
+表格中 install / uninstall / doctor / update 四列的 Purpose 各補 `--project` 說明,例如:
 
 ```markdown
 | `harness install [--project]` | Release assets into ~/.claude/ and register hooks; `--project` targets the current project's .claude/ instead |
@@ -774,7 +774,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 | `harness update [--project]` | Re-release assets after an upgrade (your modified files are kept; official copies land in .new files) |
 ```
 
-表格之後加一節：
+表格之後加一節:
 
 ```markdown
 ## Project-scoped install
@@ -796,21 +796,21 @@ The injected protocol resolves nearest-wins, like the config layers:
 
 - [ ] **Step 2: `README.zh-TW.md` 加入對應繁中內容**
 
-指令表格四列同步補 `[--project]` 與說明，並在對應位置加入：
+指令表格四列同步補 `[--project]` 與說明,並在對應位置加入:
 
 ```markdown
 ## 專案範圍安裝
 
-在專案根目錄執行 `harness install --project`，會把 harness 裝進該專案的
+在專案根目錄執行 `harness install --project`,會把 harness 裝進該專案的
 `.claude/` 而非 `~/.claude/`——hooks、agents、skills 只對這個專案生效。
-專案安裝不會建立任何設定檔：專案層的設定就是 `harness.toml`（執行
-`harness init` 生成）。全域與專案安裝可以共存；兩邊註冊的 hook 指令
-字串完全相同，Claude Code 會自動去重，每個 hook 只觸發一次。`doctor`、
+專案安裝不會建立任何設定檔:專案層的設定就是 `harness.toml`(執行
+`harness init` 生成)。全域與專案安裝可以共存;兩邊註冊的 hook 指令
+字串完全相同,Claude Code 會自動去重,每個 hook 只觸發一次。`doctor`、
 `update`、`uninstall` 也接受同樣的 flag 來管理專案安裝。釋出的檔案會
-出現在 git status——commit 進 repo 可與團隊共享這套設定，不想共享就
+出現在 git status——commit 進 repo 可與團隊共享這套設定,不想共享就
 加進 `.gitignore`。
 
-注入的行為協議與設定分層一樣採「最近的贏」：
+注入的行為協議與設定分層一樣採「最近的贏」:
 `<專案>/.claude/harness/protocol.md` → `~/.claude/harness/protocol.md`
 → 內嵌版。
 ```
@@ -818,7 +818,7 @@ The injected protocol resolves nearest-wins, like the config layers:
 - [ ] **Step 3: 確認文件與實際輸出一致**
 
 Run: `export PATH="$HOME/.cargo/bin:$PATH" && cargo run -q -- --help`
-Expected: help 顯示四個指令的 `--project`；README 描述與之相符
+Expected: help 顯示四個指令的 `--project`;README 描述與之相符
 
 - [ ] **Step 4: Commit**
 

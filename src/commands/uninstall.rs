@@ -16,6 +16,7 @@ pub fn run(project: bool) -> i32 {
             for a in &actions {
                 println!("{a}");
             }
+            note_left_symlink();
             if project {
                 println!("harness removed from this project.");
             } else {
@@ -29,6 +30,27 @@ pub fn run(project: bool) -> i32 {
         }
     }
 }
+
+/// The system-bin symlink is shared infrastructure: a global and a project
+/// install reuse the same `~/.cargo/bin` binary, and whichever installs first
+/// creates the symlink. `harness uninstall` does not remove the cargo binary
+/// (only `cargo uninstall` does), and the symlink may be shared with another
+/// install we cannot enumerate, so uninstall leaves it in place and just tells
+/// the user how to remove it if they no longer want it.
+#[cfg(unix)]
+fn note_left_symlink() {
+    if let Some(link) = crate::path::find_owned_system_symlink() {
+        let p = link.display();
+        println!(
+            "note: left system symlink {p} in place — it points to the cargo binary, which is \
+             still installed and may be shared with another harness install; remove it manually \
+             with `sudo rm {p}` if unused"
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn note_left_symlink() {}
 
 pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
     let mut actions = Vec::new();
@@ -81,6 +103,7 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
     }
+
     // Per-session verify-gate state is a harness artifact as well.
     let state_dir = claude_dir.join("harness").join("state");
     match std::fs::remove_dir_all(&state_dir) {

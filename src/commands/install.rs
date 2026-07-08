@@ -38,6 +38,7 @@ pub fn run(project: bool) -> i32 {
             } else {
                 println!("harness installed. Run `harness doctor` anytime for a health check.");
             }
+            ensure_system_path();
             0
         }
         Err(e) => {
@@ -140,6 +141,45 @@ fn write_new_copy(target: &Path, asset: &crate::assets::Asset) -> io::Result<()>
     ));
     std::fs::write(&new_path, asset.content)
 }
+
+/// If the binary is only in the cargo bin directory, try to symlink it into
+/// a system bin directory so Claude Code hook subprocesses can find it.
+/// Unix-only: on Windows `cargo install` targets a directory already on PATH,
+/// so there is nothing to fix (and no `ln`/`sudo` to suggest).
+#[cfg(unix)]
+fn ensure_system_path() {
+    use crate::path::SystemPath;
+    if !crate::path::exe_is_in_cargo_bin() {
+        return;
+    }
+    match crate::path::system_path_status() {
+        // A bare `harness` already resolves to this binary — nothing to do.
+        SystemPath::Reachable(_) => {}
+        SystemPath::Missing => {
+            if let Some(link) = crate::path::try_create_symlink() {
+                println!("symlinked harness → {}", link.display());
+            } else {
+                println!(
+                    "warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it"
+                );
+                println!("  fix: {}", crate::path::symlink_fix_hint());
+            }
+        }
+        // A different `harness` earlier on PATH would run instead of this one;
+        // a lower-priority symlink can't win, so ask the user to clear it.
+        SystemPath::Shadowed(p) => {
+            println!(
+                "warning: a different `harness` at {} shadows this install on PATH — \
+                 Claude Code hooks would run it instead",
+                p.display()
+            );
+            println!("  fix: remove it, then re-run `harness install` ({})", crate::path::symlink_fix_hint());
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ensure_system_path() {}
 
 fn user_modified_warning(rel_path: &str, target: &Path) -> String {
     let new_path = target.with_file_name(format!(
