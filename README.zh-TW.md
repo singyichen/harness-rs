@@ -1,8 +1,19 @@
-# harness — Claude Code 工程紀律引擎
+<div align="center">
 
-> 一個 Rust 單一 binary,讓 Claude Code 像個有紀律的工程師一樣工作——動手前先查證、把假設講清楚、重大結論先找人挑戰過再採信、用真正的測試證明改動有效。
+# harness
 
-[English README](README.md)
+**Claude Code 工程紀律引擎**
+
+一個 Rust 單一 binary,讓 Claude Code 像個有紀律的工程師一樣工作——動手前先查證、把假設講清楚、重大結論先找人挑戰過再採信、用真正的測試證明改動有效。
+
+![Claude Code](https://img.shields.io/badge/Claude%20Code-protocol%20%2B%20hooks-8A2BE2.svg)
+![Rust](https://img.shields.io/badge/Rust-single%20binary-orange.svg)
+![runtime deps](https://img.shields.io/badge/runtime%20deps-zero-blue.svg)
+![review](https://img.shields.io/badge/review-adversarial%20panel-red.svg)
+
+**[English](README.md)** · **繁體中文**
+
+</div>
 
 ![harness 架構圖](docs/architecture.zh-TW.png)
 

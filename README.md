@@ -1,8 +1,19 @@
-# harness — Engineering-discipline engine for Claude Code
+<div align="center">
 
-> A single Rust binary that makes Claude Code work like a disciplined engineer — look before you leap, say your assumptions out loud, get a second opinion before trusting big conclusions, and prove your work with real tests.
+# harness
 
-[繁體中文](README.zh-TW.md)
+**Engineering-discipline engine for Claude Code**
+
+A single Rust binary that makes Claude Code work like a disciplined engineer — look before you leap, say your assumptions out loud, get a second opinion before trusting big conclusions, and prove your work with real tests.
+
+![Claude Code](https://img.shields.io/badge/Claude%20Code-protocol%20%2B%20hooks-8A2BE2.svg)
+![Rust](https://img.shields.io/badge/Rust-single%20binary-orange.svg)
+![runtime deps](https://img.shields.io/badge/runtime%20deps-zero-blue.svg)
+![review](https://img.shields.io/badge/review-adversarial%20panel-red.svg)
+
+**English** · **[繁體中文](README.zh-TW.md)**
+
+</div>
 
 ![harness architecture](docs/architecture.png)
 
