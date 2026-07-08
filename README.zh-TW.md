@@ -24,9 +24,9 @@ Claude 新招式,而是確保 Claude **每一次都照著一套有紀律的流�
 鎖在單一模型裡,harness 把它提煉成一套可重複使用的協議,不管當下是哪個 Claude
 模型在主導,每個 session 都維持同一套紀律。
 
-誠實說在前面:hooks 和 skill 只能移植「程序」本身(先蒐證、講假設、交叉質疑
+誠實說在前面:hooks 和 skill 只能移植「流程」本身(先蒐證、講假設、交叉質疑
 結論、要求驗證證據),沒辦法移植一個模型天生的判斷力。但實務上,「表現得好」
-跟「表現得隨便」之間的落差,大多來自程序被跳過,而不是判斷力不足。這正是
+跟「表現得隨便」之間的落差,大多來自流程被跳過,而不是判斷力不足。這正是
 harness 想補上的落差。
 
 ## 為什麼是單一 binary
@@ -67,7 +67,7 @@ harness 想補上的落差。
   能明確列出還沒驗證的檔案。測試指令採子字串比對:
   `cd backend && cargo test --all` 也算數;但引號內的提及不算——
   `git commit -m "make cargo test pass"` 不會被當成測試執行。
-- **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出資產
+- **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出 asset
   的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是
   **你**改過的——也是「你的客製優先」背後的機制。
 
@@ -88,7 +88,7 @@ harness 想補上的落差。
 
 ```bash
 cargo install --path .
-harness install    # 釋出資產 + 註冊 hooks + 安裝 agents/skills
+harness install    # 釋出 assets + 註冊 hooks + 安裝 agents/skills
 harness doctor     # 體檢
 ```
 
@@ -99,30 +99,30 @@ harness doctor     # 體檢
 
 | 指令 | 作用 |
 | --- | --- |
-| `harness install [--project]` | 釋出資產到 ~/.claude/、註冊 hooks;`--project` 改為在當前專案的 .claude/ 安裝 |
+| `harness install [--project]` | 釋出 assets 到 ~/.claude/、註冊 hooks;`--project` 改為在當前專案的 .claude/ 安裝 |
 | `harness uninstall [--project]` | 乾淨移除(只刪自己的東西,保留你的客製與全域設定) |
 | `harness init` | 在當前專案產生 harness.toml 客製層 |
 | `harness doctor [--project]` | 體檢:hooks 註冊、版本一致、閘門衝突、安裝共存狀態 |
-| `harness update [--project]` | 升版後重釋資產(你改過的檔案保留,官方新版存 .new) |
+| `harness update [--project]` | 升版後重釋 assets(你改過的檔案保留,官方新版存 .new) |
 | `harness config` | 顯示合併後設定(內建 → 全域 → 專案) |
 | `harness hook <event>` | hook 引擎入口(Claude Code 呼叫,不需手動使用) |
 
 ## 專案範圍安裝
 
-在專案根目錄執行 `harness install --project`，會把 harness 裝進該專案的
+在專案根目錄執行 `harness install --project`,會把 harness 裝進該專案的
 `.claude/` 而非 `~/.claude/`——hooks、agents、skills 只對這個專案生效。
-專案安裝不會建立任何設定檔：專案層的設定就是 `harness.toml`（執行
-`harness init` 生成）。全域與專案安裝可以共存；兩邊註冊的 hook 指令
-字串完全相同，Claude Code 會自動去重，每個 hook 只觸發一次。`doctor`、
+專案安裝不會建立任何設定檔:專案層的設定就是 `harness.toml`(執行
+`harness init` 生成)。全域與專案安裝可以共存;兩邊註冊的 hook 指令
+字串完全相同,Claude Code 會自動去重,每個 hook 只觸發一次。`doctor`、
 `update`、`uninstall` 也接受同樣的 flag 來管理專案安裝。釋出的檔案會
-出現在 git status——commit 進 repo 可與團隊共享這套設定，不想共享就
+出現在 git status——commit 進 repo 可與團隊共享這套設定,不想共享就
 加進 `.gitignore`。
 
-注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找：
-`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd）→
+注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找:
+`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd)→
 `~/.claude/harness/protocol.md` → 內嵌版。
 
-`harness doctor` 執行四類檢查:binary 與已安裝資產的版本一致性、資產是否
+`harness doctor` 執行四類檢查:binary 與已安裝 assets 的版本一致性、assets 是否
 齊全與客製狀態(你改過的檔案算警告,不算錯誤)、四個 hooks 是否全數註冊、
 以及偵測外來的 Stop hook(警告它可能與驗證閘門同時擋下)。每個查出的問題
 都附上可直接執行的修復提示(通常是「run `harness install`」或

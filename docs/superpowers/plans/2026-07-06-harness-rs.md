@@ -2829,7 +2829,7 @@ Full content (this is the only non-English document in the repo):
 
 ```bash
 cargo install --path .
-harness install    # 釋出資產 + 註冊 hooks + 安裝 agents/skills
+harness install    # 釋出 assets + 註冊 hooks + 安裝 agents/skills
 harness doctor     # 體檢
 ```
 
@@ -2837,11 +2837,11 @@ harness doctor     # 體檢
 
 | 指令 | 作用 |
 |---|---|
-| `harness install` | 釋出資產到 ~/.claude/、註冊 hooks |
+| `harness install` | 釋出 assets 到 ~/.claude/、註冊 hooks |
 | `harness uninstall` | 乾淨移除(只刪自己的東西,保留你的客製與全域設定) |
 | `harness init` | 在當前專案產生 harness.toml 客製層 |
 | `harness doctor` | 體檢:hooks 註冊、版本一致、閘門衝突 |
-| `harness update` | 升版後重釋資產(你改過的檔案保留,官方新版存 .new) |
+| `harness update` | 升版後重釋 assets(你改過的檔案保留,官方新版存 .new) |
 | `harness config` | 顯示合併後設定(內建 → 全域 → 專案) |
 | `harness hook <event>` | hook 引擎入口(Claude Code 呼叫,不需手動使用) |
 
