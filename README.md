@@ -72,21 +72,11 @@ hook time, and every hook call is a millisecond-level native execution.
 
 ## Out of the box
 
-- **Multi-language defaults** — ~25 built-in test commands (`cargo test`,
-  `pytest`, `npm test`, `go test`, `mvn test`, `mix test`, `rspec`,
-  `dotnet test`, …) and ~21 code-file globs across languages, so the
-  verify gate works on most stacks with zero config. `docs/`, `*.md` and
-  `*.txt` are exempt by default — doc edits never trigger the gate.
-- **Precise "changed since last test" tracking** — sequence numbers record
-  the last code change vs. the last test run, and a test run clears the
-  changed-file list, so when strict mode blocks, it names exactly the
-  files still unverified. Test-command detection is substring-based —
-  `cd backend && cargo test --all` counts — but quoted mentions don't:
-  `git commit -m "make cargo test pass"` is not a test run.
-- **SHA-256 manifest** — `~/.claude/harness/manifest.json` records the
-  official hash of every released asset. That's how install / update /
-  uninstall / doctor know whether *you* modified a file — the mechanism
-  behind "your customizations win".
+| Feature | What you get |
+| --- | --- |
+| **Multi-language defaults** | ~25 built-in test commands (`cargo test`, `pytest`, `npm test`, `go test`, `mvn test`, `mix test`, `rspec`, `dotnet test`, …) and ~21 code-file globs across languages, so the verify gate works on most stacks with zero config. `docs/`, `*.md` and `*.txt` are exempt by default — doc edits never trigger the gate. |
+| **Precise "changed since last test" tracking** | Sequence numbers record the last code change vs. the last test run, and a test run clears the changed-file list, so when strict mode blocks, it names exactly the files still unverified. Test-command detection is substring-based — `cd backend && cargo test --all` counts — but quoted mentions don't: `git commit -m "make cargo test pass"` is not a test run. |
+| **SHA-256 manifest** | `~/.claude/harness/manifest.json` records the official hash of every released asset. That's how install / update / uninstall / doctor know whether *you* modified a file — the mechanism behind "your customizations win". |
 
 ## What's inside
 
@@ -154,10 +144,11 @@ Every problem it finds comes with an actionable fix hint (usually "run
 Changed code without running tests afterwards? At the end of the turn,
 the gate reacts according to its mode:
 
-- `strict`: blocks, demanding tests (or an explanation to the user; the
-  second stop attempt passes)
-- `advisory` (default): warns but allows
-- `off`: no check
+| Mode | Behavior |
+| --- | --- |
+| `strict` | Blocks, demanding tests (or an explanation to the user; the second stop attempt passes) |
+| `advisory` (default) | Warns but allows |
+| `off` | No check |
 
 Scope: the gate tracks code changes made through the agent's file tools
 (Edit / Write / MultiEdit / NotebookEdit). Mutations performed by arbitrary
@@ -189,26 +180,26 @@ test_commands = ["cargo test"]
 
 ## Adversarial review
 
-Five agent lenses (skeptic / red-team / simplifier / evidence-auditor /
-user-advocate) plus an `adversarial-review` skill: major conclusions are
-adopted only when a majority of the panel lets them survive. Panel
-membership is set via `[review].panel`.
+Before trusting a major conclusion, the `adversarial-review` skill dispatches
+independent lenses in parallel — the conclusion is adopted only when a majority
+survive the challenge. The default panel is three lenses; two more ship ready to
+enable via `[review].panel`.
+
+| Lens | What it challenges | Default panel |
+| --- | --- | --- |
+| `skeptic` | Logical holes, unverified inferences | ✓ |
+| `red-team` | Security risks, failure modes | ✓ |
+| `simplifier` | Over-engineering, needless complexity | ✓ |
+| `evidence-auditor` | Whether each claim has evidence (file:line, test output) | — |
+| `user-advocate` | Whether it solves the user's actual need; requirement drift | — |
 
 ## Design principles
 
-- **Fail-open**: any internal error in the hook engine allows the action —
-  it never breaks your session. Concretely: panics are caught and silenced
-  (hooks always exit 0), invalid config values are ignored, a broken TOML
-  layer is skipped, and state-write failures stay silent. The
-  `stop_hook_active` flag guarantees the verify gate can never block in an
-  infinite loop.
-- **settings.json safety**: timestamped backups, append-only merging,
-  atomic writes, unknown fields preserved. No change means no backup and
-  no write — a re-run is idempotent and doesn't litter backup files.
-  Marker-based recognition means harness only ever touches its own hook
-  entries, and it creates settings.json if it doesn't exist yet.
-- **Your customizations win**: install/update/uninstall never overwrite or
-  delete files you have modified.
+| Principle | What it guarantees |
+| --- | --- |
+| **Fail-open** | Any internal error in the hook engine allows the action — it never breaks your session. Panics are caught and silenced (hooks always exit 0), invalid config values are ignored, a broken TOML layer is skipped, and state-write failures stay silent. The `stop_hook_active` flag guarantees the verify gate can never block in an infinite loop. |
+| **settings.json safety** | Timestamped backups, append-only merging, atomic writes, unknown fields preserved. No change means no backup and no write — a re-run is idempotent and doesn't litter backup files. Marker-based recognition means harness only ever touches its own hook entries, and it creates settings.json if it doesn't exist yet. |
+| **Your customizations win** | install/update/uninstall never overwrite or delete files you have modified. |
 
 All of this is covered by a unit-test suite plus integration/E2E tests that
 exercise the full install → doctor → update → uninstall lifecycle.

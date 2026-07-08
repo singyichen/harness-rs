@@ -38,9 +38,14 @@ harness 想補上的落差。
 
 ## 運作機制
 
-- **OODA 迴圈**——回答前,Claude 先蒐集證據(實際搜尋/讀取檔案,不靠訓練記憶
-  亂猜),把假設講出來,把任務轉成一個可驗證的目標(「讓它能動」這種說法不夠),
-  然後小步修改、每一步都驗證。
+- **OODA 迴圈**——回答前,Claude 強制走一輪 OODA:
+
+  | 步驟 | 要求 |
+  | --- | --- |
+  | Observe | 先用工具蒐集證據(可並行),不靠訓練記憶亂猜 |
+  | Orient | 明確陳述假設;多種解讀要列出讓你選,真的不確定就停下來問 |
+  | Decide | 把任務轉成可驗證目標(fail-then-pass),別停在「讓它能動」 |
+  | Act | 小改動 → 驗證 → 迭代,每一行改動都能對回需求 |
 - **多方抗辯(adversarial review)**——harness 最具特色的機制。在採信一個重大
   結論之前(架構決策、根因判定、任何可能影響上線環境的結論),Claude 會**同時**
   派出多個獨立的「反方」子代理,各自負責不同角度:**skeptic** 專找邏輯漏洞、
@@ -58,18 +63,11 @@ harness 想補上的落差。
 
 ## 開箱即用
 
-- **多語言預設值**——內建約 25 組測試指令(`cargo test`、`pytest`、
-  `npm test`、`go test`、`mvn test`、`mix test`、`rspec`、`dotnet test`……)
-  與約 21 組跨語言的程式碼檔案 globs,大多數技術棧零設定就能用驗證閘門。
-  `docs/`、`*.md`、`*.txt` 預設豁免——改文件永遠不會觸發閘門。
-- **精準的「上次測試後改了什麼」追蹤**——用序號記錄最後一次程式碼修改與
-  最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,
-  能明確列出還沒驗證的檔案。測試指令採子字串比對:
-  `cd backend && cargo test --all` 也算數;但引號內的提及不算——
-  `git commit -m "make cargo test pass"` 不會被當成測試執行。
-- **SHA-256 manifest**——`~/.claude/harness/manifest.json` 記錄每個釋出 asset
-  的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是
-  **你**改過的——也是「你的客製優先」背後的機制。
+| 功能 | 內容 |
+| --- | --- |
+| **多語言預設值** | 內建約 25 組測試指令(`cargo test`、`pytest`、`npm test`、`go test`、`mvn test`、`mix test`、`rspec`、`dotnet test`……)與約 21 組跨語言的程式碼檔案 globs,大多數技術棧零設定就能用驗證閘門。`docs/`、`*.md`、`*.txt` 預設豁免——改文件永遠不會觸發閘門。 |
+| **精準的「上次測試後改了什麼」追蹤** | 用序號記錄最後一次程式碼修改與最後一次測試執行的先後,跑過測試就清空修改清單;所以 strict 模式擋下時,能明確列出還沒驗證的檔案。測試指令採子字串比對:`cd backend && cargo test --all` 也算數;但引號內的提及不算——`git commit -m "make cargo test pass"` 不會被當成測試執行。 |
+| **SHA-256 manifest** | `~/.claude/harness/manifest.json` 記錄每個釋出 asset 的官方雜湊值。install / update / uninstall / doctor 就是靠它判斷檔案是不是**你**改過的——也是「你的客製優先」背後的機制。 |
 
 ## 裡面有什麼
 
@@ -132,9 +130,11 @@ harness doctor     # 體檢
 
 改了程式碼卻沒在其後跑測試?回合結束時依模式處理:
 
-- `strict`:擋下,要求補測試(或向使用者說明原因後,第二次結束放行)
-- `advisory`(預設):附警告放行
-- `off`:不檢查
+| 模式 | 行為 |
+| --- | --- |
+| `strict` | 擋下,要求補測試(或向使用者說明原因後,第二次結束放行) |
+| `advisory`(預設) | 附警告放行 |
+| `off` | 不檢查 |
 
 適用範圍:閘門追蹤的是 agent 透過檔案工具(Edit / Write / MultiEdit /
 NotebookEdit)所做的程式碼變更。任意 Bash 指令造成的檔案異動(`sed -i`、
@@ -162,21 +162,25 @@ test_commands = ["cargo test"]
 
 ## 對抗審查
 
-五個 agent 鏡頭(skeptic / red-team / simplifier / evidence-auditor /
-user-advocate)+ `adversarial-review` skill,重大結論過半存活才採信。
-小組成員由 `[review].panel` 設定。
+採信重大結論前,`adversarial-review` skill 會同時派出多個獨立鏡頭,過半
+「存活」才採信。預設 panel 是三個,另外兩個也一併安裝、可透過
+`[review].panel` 加入。
+
+| 角色 | 審查角度 | 預設 panel |
+| --- | --- | --- |
+| `skeptic` | 邏輯漏洞、未驗證的推論 | ✓ |
+| `red-team` | 安全風險、失效模式 | ✓ |
+| `simplifier` | 過度工程、不必要的複雜度 | ✓ |
+| `evidence-auditor` | 每個主張是否有證據(file:line、測試輸出) | — |
+| `user-advocate` | 有沒有解決使用者原本的需求、需求是否漂移 | — |
 
 ## 設計原則
 
-- **Fail-open**:hook 引擎任何內部錯誤一律放行,絕不弄壞你的 session。
-  具體來說:panic 會被攔截並靜音(hook 永遠 exit 0)、無效的設定值直接忽略、
-  壞掉的 TOML 層直接跳過、狀態寫入失敗也保持沉默;`stop_hook_active` 旗標
-  保證驗證閘門絕不會陷入無限擋下的迴圈。
-- **settings.json 安全**:時間戳備份、只增不覆、原子寫入、保留未知欄位。
-  沒有變更就不備份、不寫入——重複執行是冪等的,不會堆一堆備份檔。靠標記
-  (marker)辨識,只會動到自己的 hook 項目;settings.json 不存在時會自動
-  建立。
-- **你的客製優先**:install/update/uninstall 都不會覆蓋或刪除你改過的檔案。
+| 原則 | 保證 |
+| --- | --- |
+| **Fail-open** | hook 引擎任何內部錯誤一律放行,絕不弄壞你的 session。panic 會被攔截並靜音(hook 永遠 exit 0)、無效的設定值直接忽略、壞掉的 TOML 層直接跳過、狀態寫入失敗也保持沉默;`stop_hook_active` 旗標保證驗證閘門絕不會陷入無限擋下的迴圈。 |
+| **settings.json 安全** | 時間戳備份、只增不覆、原子寫入、保留未知欄位。沒有變更就不備份、不寫入——重複執行是冪等的,不會堆一堆備份檔。靠標記(marker)辨識,只會動到自己的 hook 項目;settings.json 不存在時會自動建立。 |
+| **你的客製優先** | install/update/uninstall 都不會覆蓋或刪除你改過的檔案。 |
 
 以上全部由單元測試套件加整合/E2E 測試把關,涵蓋完整的
 install → doctor → update → uninstall 生命週期。
