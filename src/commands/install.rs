@@ -28,7 +28,8 @@ pub fn run(project: bool) -> i32 {
                 println!("{a}");
             }
             if project {
-                if is_same_dir(&claude_dir, dirs::home_dir().map(|h| h.join(".claude"))) {
+                let home_claude = dirs::home_dir().map(|h| h.join(".claude"));
+                if home_claude.is_some_and(|h| crate::commands::is_same_dir(&claude_dir, &h)) {
                     println!("note: --project in your home directory targets ~/.claude — this is effectively a global install (without config.toml)");
                 }
                 println!("note: no config file was created — to customize this project's gates, run `harness init`");
@@ -44,21 +45,6 @@ pub fn run(project: bool) -> i32 {
             1
         }
     }
-}
-
-/// Compare `claude_dir` against an optional candidate for equality, resolving
-/// symlinks first. Plain `PathBuf` equality is not enough here: on macOS
-/// `$TMPDIR` (and thus a temp `$HOME` in tests) lives under `/var/...`, which
-/// is a symlink to `/private/var/...`; `std::env::current_dir()` returns the
-/// resolved path while a raw `$HOME` join does not, so the two never compare
-/// equal even when they name the same directory. Fall back to the raw
-/// comparison if canonicalization fails (e.g. the candidate doesn't exist).
-fn is_same_dir(claude_dir: &Path, other: Option<std::path::PathBuf>) -> bool {
-    other.is_some_and(|o| {
-        let a = std::fs::canonicalize(claude_dir).unwrap_or_else(|_| claude_dir.to_path_buf());
-        let b = std::fs::canonicalize(&o).unwrap_or(o);
-        a == b
-    })
 }
 
 pub fn install_to(claude_dir: &Path, scope: Scope) -> io::Result<Vec<String>> {
