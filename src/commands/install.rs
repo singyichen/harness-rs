@@ -148,15 +148,34 @@ fn write_new_copy(target: &Path, asset: &crate::assets::Asset) -> io::Result<()>
 /// so there is nothing to fix (and no `ln`/`sudo` to suggest).
 #[cfg(unix)]
 fn ensure_system_path() {
-    if !crate::path::exe_is_in_cargo_bin() || crate::path::find_in_system_bin().is_some() {
+    use crate::path::SystemPath;
+    if !crate::path::exe_is_in_cargo_bin() {
         return;
     }
-    if let Some(link) = crate::path::try_create_symlink() {
-        println!("symlinked harness → {}", link.display());
-        return;
+    match crate::path::system_path_status() {
+        // A bare `harness` already resolves to this binary — nothing to do.
+        SystemPath::Reachable(_) => {}
+        SystemPath::Missing => {
+            if let Some(link) = crate::path::try_create_symlink() {
+                println!("symlinked harness → {}", link.display());
+            } else {
+                println!(
+                    "warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it"
+                );
+                println!("  fix: {}", crate::path::symlink_fix_hint());
+            }
+        }
+        // A different `harness` earlier on PATH would run instead of this one;
+        // a lower-priority symlink can't win, so ask the user to clear it.
+        SystemPath::Shadowed(p) => {
+            println!(
+                "warning: a different `harness` at {} shadows this install on PATH — \
+                 Claude Code hooks would run it instead",
+                p.display()
+            );
+            println!("  fix: remove it, then re-run `harness install` ({})", crate::path::symlink_fix_hint());
+        }
     }
-    println!("warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it");
-    println!("  fix: {}", crate::path::symlink_fix_hint());
 }
 
 #[cfg(not(unix))]

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 /// Well-known system bin directories that are virtually always on PATH,
 /// even in minimal shell environments (e.g. Claude Code hook subprocesses
-/// that don't source `~/.cargo/env`).
+/// that don't source `~/.cargo/env`). Ordered by typical PATH priority.
 const SYSTEM_BIN_CANDIDATES: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
 
 /// Returns true if the running binary lives under the cargo bin directory.
@@ -21,16 +21,30 @@ pub fn exe_is_in_cargo_bin() -> bool {
     }
 }
 
-/// Look for a `harness` on the system PATH that resolves to *this* binary.
-/// A missing, non-executable, dangling, or *different* `harness` at those
-/// paths does not count as reachable — a hook that ran it would invoke the
-/// wrong binary, so `install` should still create the symlink and `doctor`
-/// should still report the problem.
-pub fn find_in_system_bin() -> Option<PathBuf> {
-    let exe = std::env::current_exe()
-        .and_then(|p| std::fs::canonicalize(p))
-        .ok()?;
-    find_matching_in(SYSTEM_BIN_CANDIDATES, &exe)
+/// What a bare `harness` resolves to on the system PATH — the minimal PATH a
+/// Claude Code hook subprocess runs with.
+#[cfg(unix)]
+pub enum SystemPath {
+    /// The winning entry on PATH is this binary.
+    Reachable(PathBuf),
+    /// The first resolvable entry on PATH is a *different* binary; a bare
+    /// `harness` would run it instead of us.
+    Shadowed(PathBuf),
+    /// No `harness` on the system PATH.
+    Missing,
+}
+
+/// Probe the system bin directories for a reachable `harness`. Candidates are
+/// checked in PATH-priority order and the first *resolvable* entry wins: a
+/// stale/different binary in an earlier directory shadows a valid one later,
+/// which is what a bare `harness` would actually execute.
+#[cfg(unix)]
+pub fn system_path_status() -> SystemPath {
+    let exe = match std::env::current_exe().and_then(|p| std::fs::canonicalize(p)) {
+        Ok(p) => p,
+        Err(_) => return SystemPath::Missing,
+    };
+    probe_system_bin(SYSTEM_BIN_CANDIDATES, &exe)
 }
 
 /// Try to create a symlink to the current exe in the first writable
@@ -42,12 +56,13 @@ pub fn try_create_symlink() -> Option<PathBuf> {
     try_create_symlink_in(SYSTEM_BIN_CANDIDATES, &resolved, cargo_bin_dir().as_deref())
 }
 
-/// Remove a harness symlink from system bin directories. Only removes
-/// entries that are symlinks pointing into the cargo bin directory (i.e.,
-/// ones that `install` would have created).
+/// Find a harness symlink in the system bin dirs that `install` created (a
+/// symlink pointing into the cargo bin). Does *not* remove it — the cargo
+/// binary it points to outlives `harness uninstall`, and the link may be
+/// shared with other installs, so uninstall only reports it.
 #[cfg(unix)]
-pub fn remove_system_symlink() -> Option<PathBuf> {
-    remove_symlink_in(SYSTEM_BIN_CANDIDATES, cargo_bin_dir().as_deref())
+pub fn find_owned_system_symlink() -> Option<PathBuf> {
+    find_owned_symlink_in(SYSTEM_BIN_CANDIDATES, cargo_bin_dir().as_deref())
 }
 
 /// A manual fix command for when automatic symlinking fails. Unix-only:
@@ -77,18 +92,20 @@ fn resolve_cargo_bin(cargo_home: Option<OsString>, home: Option<PathBuf>) -> Opt
     }
 }
 
-/// Find a `harness` entry in `candidates` that canonicalizes to `target`.
-/// Canonicalization fails for missing paths and dangling symlinks, and a
-/// stale/foreign binary resolves to a different path — both correctly yield
-/// no match.
-fn find_matching_in(candidates: &[&str], target: &Path) -> Option<PathBuf> {
+/// The first resolvable `harness` on PATH decides reachability. A missing or
+/// dangling entry does not shadow (a shell skips it and searches on); a
+/// resolvable entry that is not our binary does.
+#[cfg(unix)]
+fn probe_system_bin(candidates: &[&str], target: &Path) -> SystemPath {
     for dir in candidates {
         let candidate = Path::new(dir).join("harness");
-        if std::fs::canonicalize(&candidate).is_ok_and(|resolved| resolved == target) {
-            return Some(candidate);
+        match std::fs::canonicalize(&candidate) {
+            Ok(resolved) if resolved == *target => return SystemPath::Reachable(candidate),
+            Ok(_) => return SystemPath::Shadowed(candidate),
+            Err(_) => continue,
         }
     }
-    None
+    SystemPath::Missing
 }
 
 /// True when `link` is a symlink whose target resolves into `cargo_bin` — a
@@ -100,6 +117,18 @@ fn symlink_points_into(link: &Path, cargo_bin: &Path) -> bool {
         Ok(target) => std::fs::canonicalize(&target).unwrap_or(target).starts_with(&cargo),
         Err(_) => false,
     }
+}
+
+#[cfg(unix)]
+fn find_owned_symlink_in(candidates: &[&str], cargo_bin: Option<&Path>) -> Option<PathBuf> {
+    let cargo_bin = cargo_bin?;
+    for dir in candidates {
+        let candidate = Path::new(dir).join("harness");
+        if candidate.is_symlink() && symlink_points_into(&candidate, cargo_bin) {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 #[cfg(unix)]
@@ -126,21 +155,6 @@ fn try_create_symlink_in(
         }
         if std::os::unix::fs::symlink(link_target, &link).is_ok() {
             return Some(link);
-        }
-    }
-    None
-}
-
-#[cfg(unix)]
-fn remove_symlink_in(candidates: &[&str], cargo_bin: Option<&Path>) -> Option<PathBuf> {
-    let cargo_bin = cargo_bin?;
-    for dir in candidates {
-        let candidate = Path::new(dir).join("harness");
-        if candidate.is_symlink()
-            && symlink_points_into(&candidate, cargo_bin)
-            && std::fs::remove_file(&candidate).is_ok()
-        {
-            return Some(candidate);
         }
     }
     None
@@ -174,8 +188,13 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn is_reachable(s: &SystemPath) -> bool {
+        matches!(s, SystemPath::Reachable(_))
+    }
+
+    #[cfg(unix)]
     #[test]
-    fn find_matching_in_returns_entry_that_is_this_binary() {
+    fn probe_reports_reachable_when_entry_is_this_binary() {
         let tmp = tempfile::tempdir().unwrap();
         let exe = tmp.path().join("real-harness");
         std::fs::write(&exe, "bin").unwrap();
@@ -184,23 +203,81 @@ mod tests {
         std::fs::create_dir(&bin).unwrap();
         std::os::unix::fs::symlink(&exe, bin.join("harness")).unwrap();
         let s = bin.to_str().unwrap();
-        assert_eq!(find_matching_in(&[s], &target), Some(bin.join("harness")));
+        match probe_system_bin(&[s], &target) {
+            SystemPath::Reachable(p) => assert_eq!(p, bin.join("harness")),
+            _ => panic!("expected Reachable"),
+        }
     }
 
+    #[cfg(unix)]
     #[test]
-    fn find_matching_in_skips_a_different_binary() {
-        // A stale or non-executable placeholder that is not our binary must
-        // not count as reachable.
+    fn probe_reports_shadowed_for_a_different_binary() {
+        // A stale/foreign `harness` must not count as reachable.
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("harness"), "someone-elses-harness").unwrap();
         let s = tmp.path().to_str().unwrap();
         let other_target = tmp.path().join("not-this-binary");
-        assert!(find_matching_in(&[s], &other_target).is_none());
+        match probe_system_bin(&[s], &other_target) {
+            SystemPath::Shadowed(_) => {}
+            _ => panic!("expected Shadowed"),
+        }
     }
 
+    #[cfg(unix)]
     #[test]
-    fn find_matching_in_skips_missing_paths() {
-        assert!(find_matching_in(&["/no/such/dir/ever"], Path::new("/whatever")).is_none());
+    fn probe_reports_missing_when_absent() {
+        assert!(matches!(
+            probe_system_bin(&["/no/such/dir/ever"], Path::new("/whatever")),
+            SystemPath::Missing
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn probe_earlier_different_binary_shadows_a_valid_later_one() {
+        // Regression: a stale binary in an earlier (higher-priority) PATH dir
+        // must shadow our valid binary in a later dir — otherwise `doctor`
+        // reports OK while a bare `harness` runs the stale one.
+        let tmp = tempfile::tempdir().unwrap();
+        let ours = tmp.path().join("real-harness");
+        std::fs::write(&ours, "us").unwrap();
+        let target = std::fs::canonicalize(&ours).unwrap();
+
+        let early = tmp.path().join("early");
+        std::fs::create_dir(&early).unwrap();
+        std::fs::write(early.join("harness"), "stale-other").unwrap();
+
+        let late = tmp.path().join("late");
+        std::fs::create_dir(&late).unwrap();
+        std::os::unix::fs::symlink(&ours, late.join("harness")).unwrap();
+
+        let cands = [early.to_str().unwrap(), late.to_str().unwrap()];
+        match probe_system_bin(&cands, &target) {
+            SystemPath::Shadowed(p) => assert_eq!(p, early.join("harness")),
+            _ => panic!("expected Shadowed by the earlier entry"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn probe_skips_dangling_earlier_entry_and_reaches_later() {
+        // A dangling (broken) symlink earlier on PATH does not shadow — a
+        // shell skips it — so a valid later entry is still Reachable.
+        let tmp = tempfile::tempdir().unwrap();
+        let ours = tmp.path().join("real-harness");
+        std::fs::write(&ours, "us").unwrap();
+        let target = std::fs::canonicalize(&ours).unwrap();
+
+        let early = tmp.path().join("early");
+        std::fs::create_dir(&early).unwrap();
+        std::os::unix::fs::symlink(tmp.path().join("does-not-exist"), early.join("harness")).unwrap();
+
+        let late = tmp.path().join("late");
+        std::fs::create_dir(&late).unwrap();
+        std::os::unix::fs::symlink(&ours, late.join("harness")).unwrap();
+
+        let cands = [early.to_str().unwrap(), late.to_str().unwrap()];
+        assert!(is_reachable(&probe_system_bin(&cands, &target)));
     }
 
     #[cfg(unix)]
@@ -246,7 +323,6 @@ mod tests {
         std::fs::create_dir(&cargo_bin).unwrap();
         let bin = root.join("bin");
         std::fs::create_dir(&bin).unwrap();
-        // Dangling: target under cargo bin that does not exist.
         std::os::unix::fs::symlink(cargo_bin.join("harness"), bin.join("harness")).unwrap();
         let new_exe = root.join("new-harness");
         std::fs::write(&new_exe, "exe").unwrap();
@@ -277,7 +353,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn remove_symlink_removes_only_links_into_cargo_bin() {
+    fn find_owned_returns_symlink_into_cargo_bin() {
         let tmp = tempfile::tempdir().unwrap();
         let root = std::fs::canonicalize(tmp.path()).unwrap();
         let cargo_bin = root.join("cargo-bin");
@@ -287,14 +363,15 @@ mod tests {
         let bin = root.join("bin");
         std::fs::create_dir(&bin).unwrap();
         std::os::unix::fs::symlink(&real, bin.join("harness")).unwrap();
-        let removed = remove_symlink_in(&[bin.to_str().unwrap()], Some(&cargo_bin)).unwrap();
-        assert_eq!(removed, bin.join("harness"));
-        assert!(!bin.join("harness").symlink_metadata().is_ok());
+        assert_eq!(
+            find_owned_symlink_in(&[bin.to_str().unwrap()], Some(&cargo_bin)),
+            Some(bin.join("harness"))
+        );
     }
 
     #[cfg(unix)]
     #[test]
-    fn remove_symlink_keeps_foreign_symlink() {
+    fn find_owned_ignores_foreign_symlink() {
         let tmp = tempfile::tempdir().unwrap();
         let root = std::fs::canonicalize(tmp.path()).unwrap();
         let cargo_bin = root.join("cargo-bin");
@@ -304,8 +381,7 @@ mod tests {
         let bin = root.join("bin");
         std::fs::create_dir(&bin).unwrap();
         std::os::unix::fs::symlink(&foreign, bin.join("harness")).unwrap();
-        assert!(remove_symlink_in(&[bin.to_str().unwrap()], Some(&cargo_bin)).is_none());
-        assert!(bin.join("harness").symlink_metadata().is_ok());
+        assert!(find_owned_symlink_in(&[bin.to_str().unwrap()], Some(&cargo_bin)).is_none());
     }
 
     #[cfg(unix)]
