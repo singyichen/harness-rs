@@ -16,6 +16,7 @@ pub fn run(project: bool) -> i32 {
             for a in &actions {
                 println!("{a}");
             }
+            remove_shared_symlink_if_orphaned(&claude_dir, project);
             if project {
                 println!("harness removed from this project.");
             } else {
@@ -27,6 +28,42 @@ pub fn run(project: bool) -> i32 {
             eprintln!("error: uninstall failed: {e}");
             1
         }
+    }
+}
+
+/// The system-bin symlink is shared infrastructure: a global and a project
+/// install reuse the same `~/.cargo/bin` binary, and whichever installs first
+/// creates the symlink. Removing it on *every* uninstall breaks the surviving
+/// install's hooks — a `harness uninstall --project` (or a global uninstall
+/// while a project install remains) would strand the other layer. So remove it
+/// only when the other layer has no harness install still relying on it.
+#[cfg(unix)]
+fn remove_shared_symlink_if_orphaned(claude_dir: &Path, project: bool) {
+    let other = if project {
+        dirs::home_dir().map(|h| h.join(".claude"))
+    } else {
+        std::env::current_dir().ok().map(|d| d.join(".claude"))
+    };
+    if !should_remove_shared_symlink(claude_dir, other.as_deref()) {
+        return;
+    }
+    if let Some(removed) = crate::path::remove_system_symlink() {
+        println!("removed symlink {}", removed.display());
+    }
+}
+
+#[cfg(not(unix))]
+fn remove_shared_symlink_if_orphaned(_claude_dir: &Path, _project: bool) {}
+
+/// True when the shared system symlink is safe to remove: the `other` layer
+/// (the `.claude` not being uninstalled) has no harness install, or is the
+/// same directory as the one being uninstalled (e.g. `--project` run from
+/// `$HOME`), or is unknown.
+#[cfg(unix)]
+fn should_remove_shared_symlink(claude_dir: &Path, other: Option<&Path>) -> bool {
+    match other {
+        Some(o) if !crate::commands::is_same_dir(claude_dir, o) => Manifest::load(o).is_none(),
+        _ => true,
     }
 }
 
@@ -81,11 +118,6 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
     }
-    // Remove system-path symlink if install created one.
-    #[cfg(unix)]
-    if let Some(removed) = crate::path::remove_system_symlink() {
-        actions.push(format!("removed symlink {}", removed.display()));
-    }
 
     // Per-session verify-gate state is a harness artifact as well.
     let state_dir = claude_dir.join("harness").join("state");
@@ -101,6 +133,43 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
 mod tests {
     use super::*;
     use crate::commands::install::{install_to, Scope};
+
+    #[cfg(unix)]
+    #[test]
+    fn keeps_shared_symlink_when_other_layer_still_installed() {
+        // Regression: `uninstall --project` (or a global uninstall) must not
+        // remove the shared system symlink while the other layer still has an
+        // install that depends on it.
+        let this = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        install_to(other.path(), Scope::Global).unwrap(); // writes a manifest
+        assert!(!should_remove_shared_symlink(this.path(), Some(other.path())));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removes_shared_symlink_when_no_other_install() {
+        let this = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap(); // no manifest → not installed
+        assert!(should_remove_shared_symlink(this.path(), Some(other.path())));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removes_shared_symlink_when_other_is_same_dir() {
+        // `--project` run from $HOME makes both layers resolve to ~/.claude;
+        // that is not a genuine coexistence, so removal is safe.
+        let tmp = tempfile::tempdir().unwrap();
+        install_to(tmp.path(), Scope::Global).unwrap();
+        assert!(should_remove_shared_symlink(tmp.path(), Some(tmp.path())));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removes_shared_symlink_when_other_unknown() {
+        let this = tempfile::tempdir().unwrap();
+        assert!(should_remove_shared_symlink(this.path(), None));
+    }
 
     #[test]
     fn uninstall_removes_released_files_and_hooks() {

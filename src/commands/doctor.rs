@@ -132,7 +132,10 @@ pub fn check(claude_dir: &Path, project: bool) -> Report {
     }
 
     // 5. PATH reachability: cargo installs into ~/.cargo/bin which is
-    //    absent from minimal shell environments (hook subprocesses).
+    //    absent from minimal shell environments (hook subprocesses). Unix-only
+    //    — on Windows `cargo install` lands on a directory already on PATH, so
+    //    the symlink mechanism and its `sudo ln -s` fix hint do not apply.
+    #[cfg(unix)]
     if crate::path::exe_is_in_cargo_bin() {
         match crate::path::find_in_system_bin() {
             Some(p) => r.oks.push(format!(

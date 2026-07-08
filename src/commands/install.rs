@@ -142,22 +142,25 @@ fn write_new_copy(target: &Path, asset: &crate::assets::Asset) -> io::Result<()>
     std::fs::write(&new_path, asset.content)
 }
 
-/// If the binary is only in `~/.cargo/bin`, try to symlink it into a
-/// system bin directory so Claude Code hook subprocesses can find it.
+/// If the binary is only in the cargo bin directory, try to symlink it into
+/// a system bin directory so Claude Code hook subprocesses can find it.
+/// Unix-only: on Windows `cargo install` targets a directory already on PATH,
+/// so there is nothing to fix (and no `ln`/`sudo` to suggest).
+#[cfg(unix)]
 fn ensure_system_path() {
     if !crate::path::exe_is_in_cargo_bin() || crate::path::find_in_system_bin().is_some() {
         return;
     }
-    #[cfg(unix)]
     if let Some(link) = crate::path::try_create_symlink() {
         println!("symlinked harness → {}", link.display());
         return;
     }
-    println!(
-        "warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it"
-    );
+    println!("warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it");
     println!("  fix: {}", crate::path::symlink_fix_hint());
 }
+
+#[cfg(not(unix))]
+fn ensure_system_path() {}
 
 fn user_modified_warning(rel_path: &str, target: &Path) -> String {
     let new_path = target.with_file_name(format!(
