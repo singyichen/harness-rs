@@ -17,16 +17,32 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Release assets into ~/.claude/, register hooks, install agents/skills
-    Install,
+    /// Release assets into ~/.claude/ (or ./.claude with --project), register hooks
+    Install {
+        /// Install into the current project's .claude/ instead of ~/.claude/
+        #[arg(long)]
+        project: bool,
+    },
     /// Cleanly remove everything harness registered or installed
-    Uninstall,
+    Uninstall {
+        /// Remove the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Generate a harness.toml customization layer in the current project
     Init,
     /// Health check: hooks registered, versions consistent, conflicting harnesses
-    Doctor,
+    Doctor {
+        /// Check the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Re-release assets after an upgrade (user-modified files are preserved)
-    Update,
+    Update {
+        /// Update the current project's install instead of the global one
+        #[arg(long)]
+        project: bool,
+    },
     /// Print the merged effective config (built-in + global + project)
     Config,
     /// Hook engine entry point, invoked by Claude Code
@@ -36,11 +52,11 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Install => commands::install::run(),
-        Command::Uninstall => commands::uninstall::run(),
+        Command::Install { project } => commands::install::run(project),
+        Command::Uninstall { project } => commands::uninstall::run(project),
         Command::Init => commands::init::run(),
-        Command::Doctor => commands::doctor::run(),
-        Command::Update => commands::update::run(),
+        Command::Doctor { project } => commands::doctor::run(project),
+        Command::Update { project } => commands::update::run(project),
         Command::Config => commands::config_cmd::run(),
         Command::Hook { event } => hooks::run(&event),
     };

@@ -99,13 +99,28 @@ harness doctor     # 體檢
 
 | 指令 | 作用 |
 | --- | --- |
-| `harness install` | 釋出資產到 ~/.claude/、註冊 hooks |
-| `harness uninstall` | 乾淨移除(只刪自己的東西,保留你的客製與全域設定) |
+| `harness install [--project]` | 釋出資產到 ~/.claude/、註冊 hooks;`--project` 改為在當前專案的 .claude/ 安裝 |
+| `harness uninstall [--project]` | 乾淨移除(只刪自己的東西,保留你的客製與全域設定) |
 | `harness init` | 在當前專案產生 harness.toml 客製層 |
-| `harness doctor` | 體檢:hooks 註冊、版本一致、閘門衝突 |
-| `harness update` | 升版後重釋資產(你改過的檔案保留,官方新版存 .new) |
+| `harness doctor [--project]` | 體檢:hooks 註冊、版本一致、閘門衝突、安裝共存狀態 |
+| `harness update [--project]` | 升版後重釋資產(你改過的檔案保留,官方新版存 .new) |
 | `harness config` | 顯示合併後設定(內建 → 全域 → 專案) |
 | `harness hook <event>` | hook 引擎入口(Claude Code 呼叫,不需手動使用) |
+
+## 專案範圍安裝
+
+在專案根目錄執行 `harness install --project`，會把 harness 裝進該專案的
+`.claude/` 而非 `~/.claude/`——hooks、agents、skills 只對這個專案生效。
+專案安裝不會建立任何設定檔：專案層的設定就是 `harness.toml`（執行
+`harness init` 生成）。全域與專案安裝可以共存；兩邊註冊的 hook 指令
+字串完全相同，Claude Code 會自動去重，每個 hook 只觸發一次。`doctor`、
+`update`、`uninstall` 也接受同樣的 flag 來管理專案安裝。釋出的檔案會
+出現在 git status——commit 進 repo 可與團隊共享這套設定，不想共享就
+加進 `.gitignore`。
+
+注入的行為協議依固定順序解析——不像設定分層那樣會往上層目錄找：
+`<cwd>/.claude/harness/protocol.md`(session 當下的 cwd）→
+`~/.claude/harness/protocol.md` → 內嵌版。
 
 `harness doctor` 執行四類檢查:binary 與已安裝資產的版本一致性、資產是否
 齊全與客製狀態(你改過的檔案算警告,不算錯誤)、四個 hooks 是否全數註冊、
