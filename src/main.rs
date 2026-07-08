@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod hooks;
+mod path;
 mod settings;
 mod state;
 mod assets;

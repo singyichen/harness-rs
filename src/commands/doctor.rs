@@ -130,6 +130,22 @@ pub fn check(claude_dir: &Path, project: bool) -> Report {
             "another Stop hook detected (`{cmd}`); it may double-block alongside the harness verify gate"
         ));
     }
+
+    // 5. PATH reachability: cargo installs into ~/.cargo/bin which is
+    //    absent from minimal shell environments (hook subprocesses).
+    if crate::path::exe_is_in_cargo_bin() {
+        match crate::path::find_in_system_bin() {
+            Some(p) => r.oks.push(format!(
+                "harness reachable from system PATH ({})",
+                p.display()
+            )),
+            None => r.problems.push(format!(
+                "harness is only reachable via ~/.cargo/bin — Claude Code hooks may not find it; \
+                 fix: {}",
+                crate::path::symlink_fix_hint()
+            )),
+        }
+    }
     r
 }
 

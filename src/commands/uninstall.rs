@@ -81,6 +81,12 @@ pub fn uninstall_from(claude_dir: &Path) -> io::Result<Vec<String>> {
         }
         std::fs::remove_file(Manifest::path(claude_dir))?;
     }
+    // Remove system-path symlink if install created one.
+    #[cfg(unix)]
+    if let Some(removed) = crate::path::remove_system_symlink() {
+        actions.push(format!("removed symlink {}", removed.display()));
+    }
+
     // Per-session verify-gate state is a harness artifact as well.
     let state_dir = claude_dir.join("harness").join("state");
     match std::fs::remove_dir_all(&state_dir) {

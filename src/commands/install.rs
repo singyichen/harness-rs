@@ -38,6 +38,7 @@ pub fn run(project: bool) -> i32 {
             } else {
                 println!("harness installed. Run `harness doctor` anytime for a health check.");
             }
+            ensure_system_path();
             0
         }
         Err(e) => {
@@ -139,6 +140,23 @@ fn write_new_copy(target: &Path, asset: &crate::assets::Asset) -> io::Result<()>
         target.file_name().unwrap().to_string_lossy()
     ));
     std::fs::write(&new_path, asset.content)
+}
+
+/// If the binary is only in `~/.cargo/bin`, try to symlink it into a
+/// system bin directory so Claude Code hook subprocesses can find it.
+fn ensure_system_path() {
+    if !crate::path::exe_is_in_cargo_bin() || crate::path::find_in_system_bin().is_some() {
+        return;
+    }
+    #[cfg(unix)]
+    if let Some(link) = crate::path::try_create_symlink() {
+        println!("symlinked harness → {}", link.display());
+        return;
+    }
+    println!(
+        "warning: harness is only in ~/.cargo/bin — Claude Code hooks may not find it"
+    );
+    println!("  fix: {}", crate::path::symlink_fix_hint());
 }
 
 fn user_modified_warning(rel_path: &str, target: &Path) -> String {
